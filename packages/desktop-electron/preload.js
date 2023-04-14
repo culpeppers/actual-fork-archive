@@ -1,21 +1,10 @@
-const { ipcRenderer, contextBridge } = require('electron');
-const SentryClient = require('@sentry/electron');
-const ipc = require('node-ipc');
 const fs = require('fs');
 
-let { version: VERSION, isDev: IS_DEV } = ipcRenderer.sendSync(
-  'get-bootstrap-data'
-);
+const { ipcRenderer, contextBridge } = require('electron');
+const ipc = require('node-ipc');
 
-if (!IS_DEV) {
-  // This just inits the IPC bridge for sending events from the renderer process
-  // back to the main process
-  SentryClient.init({
-    dsn:
-      'https://f2fa901455894dc8bf28210ef1247e2d:b9e69eb21d9740539b3ff593f7346396@sentry.io/261029',
-    release: VERSION
-  });
-}
+let { version: VERSION, isDev: IS_DEV } =
+  ipcRenderer.sendSync('get-bootstrap-data');
 
 let resolveSocketPromise;
 let socketPromise = new Promise(resolve => {
@@ -44,7 +33,7 @@ contextBridge.exposeInMainWorld('Actual', {
         },
         emit(name, data) {
           return client.emit(name, data);
-        }
+        },
       });
     });
   },
@@ -60,7 +49,7 @@ contextBridge.exposeInMainWorld('Actual', {
   saveFile: async (contents, filename, dialogTitle) => {
     const fileLocation = await ipcRenderer.invoke('save-file-dialog', {
       title: dialogTitle,
-      defaultPath: filename
+      defaultPath: filename,
     });
 
     return new Promise((resolve, reject) => {
@@ -94,5 +83,5 @@ contextBridge.exposeInMainWorld('Actual', {
 
   getServerSocket: () => {
     return socketPromise;
-  }
+  },
 });

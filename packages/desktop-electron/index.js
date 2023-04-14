@@ -1,3 +1,5 @@
+/* eslint-disable import/order */
+// (I have no idea why the imports are like this. Not touching them.)
 const isDev = require('electron-is-dev');
 require('module').globalPaths.push(__dirname + '/..');
 
@@ -8,47 +10,27 @@ const {
   Menu,
   dialog,
   shell,
-  protocol
+  protocol,
 } = require('electron');
+const promiseRetry = require('promise-retry');
 
 // This allows relative URLs to be resolved to app:// which makes
 // local assets load correctly
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'app', privileges: { standard: true } }
+  { scheme: 'app', privileges: { standard: true } },
 ]);
 
 global.fetch = require('node-fetch');
 
-const SentryClient = require('@sentry/electron');
-const findOpenSocket = require('./findOpenSocket');
-const updater = require('./updater');
 const about = require('./about');
-const { SentryMetricIntegration } = require('@jlongster/sentry-metrics-actual');
+const findOpenSocket = require('./findOpenSocket');
+const getMenu = require('./menu');
+const updater = require('./updater');
 
 require('./security');
 
-if (!isDev) {
-  // Install sentry
-  SentryClient.init({
-    dsn:
-      'https://f2fa901455894dc8bf28210ef1247e2d:b9e69eb21d9740539b3ff593f7346396@sentry.io/261029',
-    release: app.getVersion(),
-    enableUnresponsive: false,
-    ignoreErrors: ['PostError', 'HTTPError', 'ResizeObserver loop'],
-    integrations: [
-      new SentryMetricIntegration({
-        url: 'https://sync.actualbudget.com/metrics',
-        metric: 'app-errors',
-        dimensions: { platform: 'desktop' },
-        headers: { Origin: 'app://actual' }
-      })
-    ]
-  });
-}
-
 const { fork } = require('child_process');
 const path = require('path');
-const getMenu = require('./menu');
 
 require('./setRequireHook');
 
@@ -65,7 +47,7 @@ const WindowState = require('./window-state.js');
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let clientWin;
-let serverWin;
+let serverWin; // eslint-disable-line no-unused-vars
 let serverProcess;
 let serverSocket;
 let IS_QUITTING = false;
@@ -86,22 +68,16 @@ if (isDev) {
 }
 
 function createBackgroundProcess(socketName) {
-  const SentryClient = require('@sentry/electron');
-
   serverProcess = fork(__dirname + '/server.js', [
     '--subprocess',
     app.getVersion(),
-    socketName
+    socketName,
   ]);
 
   serverProcess.on('message', msg => {
     switch (msg.type) {
       case 'captureEvent':
-        let event = msg.event;
-        SentryClient.captureEvent(event);
-        break;
       case 'captureBreadcrumb':
-        SentryClient.addBreadcrumb(msg.breadcrumb);
         break;
       case 'shouldAutoUpdate':
         if (msg.flag) {
@@ -122,8 +98,8 @@ function createBackgroundWindow(socketName) {
     title: 'Actual Server',
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false
-    }
+      contextIsolation: false,
+    },
   });
   win.loadURL(`file://${__dirname}/server.html`);
 
@@ -152,8 +128,8 @@ async function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: __dirname + '/preload.js'
-    }
+      preload: __dirname + '/preload.js',
+    },
   });
   win.setBackgroundColor('#E8ECF0');
 
@@ -163,7 +139,7 @@ async function createWindow() {
     win.loadURL(`file://${__dirname}/loading.html`);
     // Wait for the development server to start
     setTimeout(() => {
-      win.loadURL('http://localhost:3001/');
+      promiseRetry(retry => win.loadURL('http://localhost:3001/').catch(retry));
     }, 3000);
   } else {
     win.loadURL(`app://actual/`);
@@ -186,7 +162,7 @@ async function createWindow() {
 
   win.on('unresponsive', () => {
     console.log(
-      'browser window went unresponsive (maybe because of a modal though)'
+      'browser window went unresponsive (maybe because of a modal though)',
     );
   });
 
@@ -218,10 +194,7 @@ function updateMenu(isBudgetOpen) {
   fileItems
     .filter(
       item =>
-        item.label === 'Start Tutorial' ||
-        item.label === 'Manage Payees...' ||
-        item.label === 'Manage Rules...' ||
-        item.label === 'Load Backup...'
+        item.label === 'Start Tutorial' || item.label === 'Load Backup...',
     )
 
     .map(item => (item.enabled = isBudgetOpen));
@@ -273,13 +246,13 @@ app.on('ready', async () => {
 
     const pathname = parsedUrl.pathname;
 
-    if (pathname.startsWith('/static') || pathname.startsWith('/Inter')) {
+    if (pathname.startsWith('/static')) {
       callback({
-        path: path.normalize(`${__dirname}/client-build${pathname}`)
+        path: path.normalize(`${__dirname}/client-build${pathname}`),
       });
     } else {
       callback({
-        path: path.normalize(`${__dirname}/client-build/index.html`)
+        path: path.normalize(`${__dirname}/client-build/index.html`),
       });
     }
   });
@@ -325,12 +298,8 @@ app.on('activate', () => {
 ipcMain.on('get-bootstrap-data', event => {
   event.returnValue = {
     version: app.getVersion(),
-    isDev
+    isDev,
   };
-});
-
-ipcMain.handle('get-version', () => {
-  return app.getVersion();
 });
 
 ipcMain.handle('relaunch', () => {
@@ -341,7 +310,7 @@ ipcMain.handle('relaunch', () => {
 ipcMain.handle('open-file-dialog', (event, { filters, properties }) => {
   return dialog.showOpenDialogSync({
     properties: properties || ['openFile'],
-    filters
+    filters,
   });
 });
 

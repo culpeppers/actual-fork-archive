@@ -1,10 +1,14 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useContext } from 'react';
 
 import LRU from 'lru-cache';
 
-import SpreadsheetContext from 'loot-design/src/components/spreadsheet/SpreadsheetContext';
-
 import { listen, send } from '../platform/client/fetch';
+
+const SpreadsheetContext = React.createContext(undefined);
+
+export function useSpreadsheet() {
+  return useContext(SpreadsheetContext);
+}
 
 function makeSpreadsheet() {
   const cellObservers = {};
@@ -41,7 +45,7 @@ function makeSpreadsheet() {
     }
 
     listen() {
-      return listen('cells-changed', function(nodes) {
+      return listen('cells-changed', function (nodes) {
         if (!observersDisabled) {
           // TODO: batch react so only renders once
           nodes.forEach(node => {
@@ -104,7 +108,7 @@ function makeSpreadsheet() {
       return send('create-query', {
         sheetName,
         name,
-        query: query.serialize()
+        query: query.serialize(),
       });
     }
   }

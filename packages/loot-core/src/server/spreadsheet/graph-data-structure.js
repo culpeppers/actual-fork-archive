@@ -9,7 +9,7 @@ function Graph(serialized) {
     removeIncomingEdges,
     topologicalSort,
     generateDOT,
-    getEdges
+    getEdges,
   };
 
   var edges = new Map();
@@ -41,6 +41,7 @@ function Graph(serialized) {
     removeIncomingEdges(node);
     edges.delete(node);
     incomingEdges.delete(node);
+    return graph;
   }
 
   function adjacent(node) {
@@ -104,7 +105,7 @@ function Graph(serialized) {
 
   function generateDOT() {
     let edgeStrings = [];
-    edges.forEach(function(adj, edge) {
+    edges.forEach(function (adj, edge) {
       if (adj.length !== 0) {
         edgeStrings.push(`${edge} -> {${adj.join(',')}}`);
       }
@@ -120,4 +121,4 @@ function Graph(serialized) {
   return graph;
 }
 
-module.exports = Graph;
+export default Graph;

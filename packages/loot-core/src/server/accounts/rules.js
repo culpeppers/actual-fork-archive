@@ -7,21 +7,13 @@ import {
   isAfter,
   addDays,
   subDays,
-  parseDate
+  parseDate,
 } from '../../shared/months';
 import { sortNumbers, getApproxNumberThreshold } from '../../shared/rules';
 import { recurConfigToRSchedule } from '../../shared/schedules';
 import { fastSetMerge } from '../../shared/util';
 import { RuleError } from '../errors';
 import { Schedule as RSchedule } from '../util/rschedule';
-
-function safeNumber(n) {
-  return isNaN(n) ? null : n;
-}
-
-function safeParseInt(n) {
-  return safeNumber(parseInt(n));
-}
 
 function assert(test, type, msg) {
   if (!test) {
@@ -35,7 +27,7 @@ export function parseRecurDate(desc) {
 
     return {
       type: 'recur',
-      schedule: new RSchedule({ rrules: rules })
+      schedule: new RSchedule({ rrules: rules }),
     };
   } catch (e) {
     throw new RuleError('parse-recur-date', e.message);
@@ -93,7 +85,7 @@ let CONDITION_TYPES = {
       assert(
         parsed,
         'date-format',
-        `Invalid date format (field: ${fieldName})`
+        `Invalid date format (field: ${fieldName})`,
       );
 
       // Approximate only works with exact & recurring dates
@@ -101,7 +93,7 @@ let CONDITION_TYPES = {
         assert(
           parsed.type === 'date' || parsed.type === 'recur',
           'date-format',
-          `Invalid date value for "isapprox" (field: ${fieldName})`
+          `Invalid date value for “isapprox” (field: ${fieldName})`,
         );
       }
       // These only work with exact dates
@@ -109,12 +101,12 @@ let CONDITION_TYPES = {
         assert(
           parsed.type === 'date',
           'date-format',
-          `Invalid date value for "${op}" (field: ${fieldName})`
+          `Invalid date value for “${op}” (field: ${fieldName})`,
         );
       }
 
       return parsed;
-    }
+    },
   },
   id: {
     ops: ['is', 'contains', 'oneOf'],
@@ -124,12 +116,12 @@ let CONDITION_TYPES = {
         assert(
           Array.isArray(value),
           'no-empty-array',
-          `oneOf must have an array value (field: ${fieldName})`
+          `oneOf must have an array value (field: ${fieldName})`,
         );
         return value;
       }
       return value;
-    }
+    },
   },
   string: {
     ops: ['is', 'contains', 'oneOf'],
@@ -140,8 +132,8 @@ let CONDITION_TYPES = {
           Array.isArray(value),
           'no-empty-array',
           `oneOf must have an array value (field: ${fieldName}): ${JSON.stringify(
-            value
-          )}`
+            value,
+          )}`,
         );
         return value.filter(Boolean).map(val => val.toLowerCase());
       }
@@ -150,12 +142,12 @@ let CONDITION_TYPES = {
         assert(
           typeof value === 'string' && value.length > 0,
           'no-empty-string',
-          `contains must have non-empty string (field: ${fieldName})`
+          `contains must have non-empty string (field: ${fieldName})`,
         );
       }
 
       return value.toLowerCase();
-    }
+    },
   },
   number: {
     ops: ['is', 'isapprox', 'isbetween', 'gt', 'gte', 'lt', 'lte'],
@@ -170,26 +162,26 @@ let CONDITION_TYPES = {
         parsed != null,
         'not-number',
         `Value must be a number or between amount: ${JSON.stringify(
-          value
-        )} (field: ${fieldName})`
+          value,
+        )} (field: ${fieldName})`,
       );
 
       if (op === 'isbetween') {
         assert(
           parsed.type === 'between',
           'number-format',
-          `Invalid between value for "${op}" (field: ${fieldName})`
+          `Invalid between value for “${op}” (field: ${fieldName})`,
         );
       } else {
         assert(
           parsed.type === 'literal',
           'number-format',
-          `Invalid number value for "${op}" (field: ${fieldName})`
+          `Invalid number value for “${op}” (field: ${fieldName})`,
         );
       }
 
       return parsed;
-    }
+    },
   },
   boolean: {
     ops: ['is'],
@@ -198,12 +190,12 @@ let CONDITION_TYPES = {
       assert(
         typeof value === 'boolean',
         'not-boolean',
-        `Value must be a boolean: ${value} (field: ${fieldName})`
+        `Value must be a boolean: ${value} (field: ${fieldName})`,
       );
 
       return value;
-    }
-  }
+    },
+  },
 };
 
 export class Condition {
@@ -218,12 +210,12 @@ export class Condition {
     assert(
       type,
       'internal',
-      `Invalid condition type: ${typeName} (field: ${field})`
+      `Invalid condition type: ${typeName} (field: ${field})`,
     );
     assert(
       type.ops.includes(op),
       'internal',
-      `Invalid condition operator: ${op} (type: ${typeName}, field: ${field})`
+      `Invalid condition operator: ${op} (type: ${typeName}, field: ${field})`,
     );
 
     if (type.nullable !== true) {
@@ -286,7 +278,7 @@ export class Condition {
               let fieldDate = parseDate(fieldValue);
               return schedule.occursBetween(
                 dateFns.subDays(fieldDate, 2),
-                dateFns.addDays(fieldDate, 2)
+                dateFns.addDays(fieldDate, 2),
               );
             } else {
               return schedule.occursOn({ date: parseDate(fieldValue) });
@@ -393,7 +385,7 @@ export class Condition {
       field: this.field,
       value: this.unparsedValue,
       type: this.type,
-      ...(this.options ? { options: this.options } : null)
+      ...(this.options ? { options: this.options } : null),
     };
   }
 }
@@ -405,7 +397,7 @@ export class Action {
     assert(
       ACTION_OPS.includes(op),
       'internal',
-      `Invalid action operation: ${op}`
+      `Invalid action operation: ${op}`,
     );
 
     if (op === 'set') {
@@ -442,20 +434,21 @@ export class Action {
       field: this.field,
       value: this.value,
       type: this.type,
-      ...(this.options ? { options: this.options } : null)
+      ...(this.options ? { options: this.options } : null),
     };
   }
 }
 
 export class Rule {
-  constructor({ id, stage, conditions, actions, fieldTypes }) {
+  constructor({ id, stage, conditionsOp, conditions, actions, fieldTypes }) {
     this.id = id;
     this.stage = stage;
+    this.conditionsOp = conditionsOp;
     this.conditions = conditions.map(
-      c => new Condition(c.op, c.field, c.value, c.options, fieldTypes)
+      c => new Condition(c.op, c.field, c.value, c.options, fieldTypes),
     );
     this.actions = actions.map(
-      a => new Action(a.op, a.field, a.value, a.options, fieldTypes)
+      a => new Action(a.op, a.field, a.value, a.options, fieldTypes),
     );
   }
 
@@ -464,7 +457,8 @@ export class Rule {
       return false;
     }
 
-    return this.conditions.every(condition => {
+    const method = this.conditionsOp === 'or' ? 'some' : 'every';
+    return this.conditions[method](condition => {
       return condition.eval(object);
     });
   }
@@ -496,8 +490,9 @@ export class Rule {
     return {
       id: this.id,
       stage: this.stage,
+      conditionsOp: this.conditionsOp,
       conditions: this.conditions.map(c => c.serialize()),
-      actions: this.actions.map(a => a.serialize())
+      actions: this.actions.map(a => a.serialize()),
     };
   }
 }
@@ -572,7 +567,7 @@ export class RuleIndexer {
 
     return fastSetMerge(
       indexedRules || new Set(),
-      this.rules.get('*') || new Set()
+      this.rules.get('*') || new Set(),
     );
   }
 }
@@ -586,7 +581,7 @@ const OP_SCORES = {
   gte: 1,
   lt: 1,
   lte: 1,
-  contains: 0
+  contains: 0,
 };
 
 function computeScore(rule) {
@@ -601,7 +596,7 @@ function computeScore(rule) {
 
   if (
     rule.conditions.every(
-      cond => cond.op === 'is' || cond.op === 'isapprox' || cond.op === 'oneOf'
+      cond => cond.op === 'is' || cond.op === 'isapprox' || cond.op === 'oneOf',
     )
   ) {
     return initialScore * 2;
@@ -703,7 +698,6 @@ export function migrateIds(rule, mappings) {
 
 // This finds all the rules that reference the `id`
 export function iterateIds(rules, fieldName, func) {
-  let counts = {};
   let i;
 
   ruleiter: for (i = 0; i < rules.length; i++) {

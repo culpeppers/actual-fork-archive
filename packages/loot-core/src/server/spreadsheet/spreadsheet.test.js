@@ -1,5 +1,6 @@
 import { generateTransaction } from '../../mocks';
 import * as db from '../db';
+
 import Spreadsheet from './spreadsheet';
 
 beforeEach(global.emptyDatabase());
@@ -18,29 +19,29 @@ async function insertTransactions(payeeId = null) {
   await db.insertTransaction(
     generateTransaction({
       amount: -3200,
-      acct: '1',
+      account: '1',
       category: 'cat1',
       date: '2017-01-08',
-      description: payeeId
-    })[0]
+      description: payeeId,
+    })[0],
   );
   await db.insertTransaction(
     generateTransaction({
       amount: -2800,
-      acct: '1',
+      account: '1',
       category: 'cat2',
       date: '2017-01-10',
-      description: payeeId
-    })[0]
+      description: payeeId,
+    })[0],
   );
   await db.insertTransaction(
     generateTransaction({
       amount: -9832,
-      acct: '1',
+      account: '1',
       category: 'cat2',
       date: '2017-01-15',
-      description: payeeId
-    })[0]
+      description: payeeId,
+    })[0],
   );
 }
 
@@ -107,40 +108,40 @@ describe('Spreadsheet', () => {
   //   });
   // });
 
-  // test('querying transactions works', async () => {
-  //   const spreadsheet = new Spreadsheet(db);
-  //   await insertTransactions();
+  test('querying transactions works', async () => {
+    const spreadsheet = new Spreadsheet(db);
+    await insertTransactions();
 
-  //   spreadsheet.startTransaction();
-  //   spreadsheet.set('g!foo', `=from transactions select { amount, category }`);
-  //   spreadsheet.endTransaction();
+    spreadsheet.startTransaction();
+    spreadsheet.set('g!foo', `=from transactions select { amount, category }`);
+    spreadsheet.endTransaction();
 
-  //   return new Promise(resolve => {
-  //     spreadsheet.onFinish(() => {
-  //       expect(spreadsheet.getValue('g!foo')).toMatchSnapshot();
-  //       resolve();
-  //     });
-  //   });
-  // });
+    return new Promise(resolve => {
+      spreadsheet.onFinish(() => {
+        expect(spreadsheet.getValue('g!foo')).toMatchSnapshot();
+        resolve();
+      });
+    });
+  });
 
-  // test('querying deep join works', async () => {
-  //   const spreadsheet = new Spreadsheet(db);
-  //   let payeeId1 = await db.insertPayee({ name: '', transfer_acct: '1' });
-  //   let payeeId2 = await db.insertPayee({ name: '', transfer_acct: '2' });
-  //   await insertTransactions(payeeId2);
+  test('querying deep join works', async () => {
+    const spreadsheet = new Spreadsheet(db);
+    await db.insertPayee({ name: '', transfer_acct: '1' });
+    let payeeId2 = await db.insertPayee({ name: '', transfer_acct: '2' });
+    await insertTransactions(payeeId2);
 
-  //   spreadsheet.set(
-  //     'g!foo',
-  //     '=from transactions where acct.offbudget = 0 and (description.transfer_acct.offbudget = null or description.transfer_acct.offbudget = 1) select { acct.offbudget, description.transfer_acct.offbudget as foo, amount }'
-  //   );
+    spreadsheet.set(
+      'g!foo',
+      '=from transactions where acct.offbudget = 0 and (description.transfer_acct.offbudget = null or description.transfer_acct.offbudget = 1) select { acct.offbudget, description.transfer_acct.offbudget as foo, amount }',
+    );
 
-  //   return new Promise(resolve => {
-  //     spreadsheet.onFinish(() => {
-  //       expect(spreadsheet.getValue('g!foo')).toMatchSnapshot();
-  //       resolve();
-  //     });
-  //   });
-  // });
+    return new Promise(resolve => {
+      spreadsheet.onFinish(() => {
+        expect(spreadsheet.getValue('g!foo')).toMatchSnapshot();
+        resolve();
+      });
+    });
+  });
 
   test('async cells work', done => {
     const spreadsheet = new Spreadsheet();
@@ -150,7 +151,7 @@ describe('Spreadsheet', () => {
       run: async () => {
         await wait(100);
         return 5;
-      }
+      },
     });
 
     spreadsheet.onFinish(() => {
@@ -170,7 +171,7 @@ describe('Spreadsheet', () => {
         run: async () => {
           await wait(100);
           return 5;
-        }
+        },
       });
 
       spreadsheet.createDynamic('foo', 'y', {
@@ -178,7 +179,7 @@ describe('Spreadsheet', () => {
         dependencies: ['x'],
         run: x => {
           return x * 3;
-        }
+        },
       });
     });
 

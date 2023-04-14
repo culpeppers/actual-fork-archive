@@ -1,18 +1,19 @@
 import throttle from 'throttleit';
 
 import { send } from '../../platform/client/fetch';
-import constants from '../constants';
+import * as constants from '../constants';
+
 import { pushModal } from './modals';
 import { addNotification, addGenericErrorNotification } from './notifications';
 
 export function applyBudgetAction(month, type, args) {
-  return async function() {
+  return async function (dispatch) {
     switch (type) {
       case 'budget-amount':
         await send('budget/budget-amount', {
           month,
           category: args.category,
-          amount: args.amount
+          amount: args.amount,
         });
         break;
       case 'copy-last':
@@ -24,10 +25,22 @@ export function applyBudgetAction(month, type, args) {
       case 'set-3-avg':
         await send('budget/set-3month-avg', { month });
         break;
+      case 'apply-goal-template':
+        dispatch(
+          addNotification(await send('budget/apply-goal-template', { month })),
+        );
+        break;
+      case 'overwrite-goal-template':
+        dispatch(
+          addNotification(
+            await send('budget/overwrite-goal-template', { month }),
+          ),
+        );
+        break;
       case 'hold':
         await send('budget/hold-for-next-month', {
           month,
-          amount: args.amount
+          amount: args.amount,
         });
         break;
       case 'reset-hold':
@@ -37,14 +50,14 @@ export function applyBudgetAction(month, type, args) {
         await send('budget/cover-overspending', {
           month,
           to: args.to,
-          from: args.from
+          from: args.from,
         });
         break;
       case 'transfer-available':
         await send('budget/transfer-available', {
           month,
           amount: args.amount,
-          category: args.category
+          category: args.category,
         });
         break;
       case 'transfer-category':
@@ -52,14 +65,14 @@ export function applyBudgetAction(month, type, args) {
           month,
           amount: args.amount,
           from: args.from,
-          to: args.to
+          to: args.to,
         });
         break;
       case 'carryover': {
         await send('budget/set-carryover', {
           startMonth: month,
           category: args.category,
-          flag: args.flag
+          flag: args.flag,
         });
         break;
       }
@@ -69,22 +82,22 @@ export function applyBudgetAction(month, type, args) {
 }
 
 export function getCategories() {
-  return async function(dispatch) {
+  return async function (dispatch) {
     const categories = await send('get-categories');
     dispatch({
       type: constants.LOAD_CATEGORIES,
-      categories
+      categories,
     });
     return categories;
   };
 }
 
 export function createCategory(name, groupId, isIncome) {
-  return async function(dispatch) {
+  return async function (dispatch) {
     let id = await send('category-create', {
       name,
       groupId,
-      isIncome
+      isIncome,
     });
     dispatch(getCategories());
     return id;
@@ -92,19 +105,18 @@ export function createCategory(name, groupId, isIncome) {
 }
 
 export function deleteCategory(id, transferId) {
-  return async function(dispatch, getState) {
+  return async function (dispatch, getState) {
     let { error } = await send('category-delete', { id, transferId });
 
     if (error) {
-      let msg;
       switch (error) {
         case 'category-type':
           dispatch(
             addNotification({
               type: 'error',
               message:
-                'A category must be transferred to another of the same type (expense or income)'
-            })
+                'A category must be transferred to another of the same type (expense or income)',
+            }),
           );
           break;
         default:
@@ -163,8 +175,7 @@ export function updateGroup(group) {
 }
 
 export function deleteGroup(id, transferId) {
-  return async function(dispatch, getState) {
-    const group = getState().queries.categories.grouped.find(g => g.id === id);
+  return async function (dispatch, getState) {
     await send('category-group-delete', { id, transferId });
     await dispatch(getCategories());
     // See `deleteCategory` for why we need this
@@ -173,18 +184,18 @@ export function deleteGroup(id, transferId) {
 }
 
 export function getPayees() {
-  return async function(dispatch) {
+  return async function (dispatch) {
     let payees = await send('payees-get');
     dispatch({
       type: constants.LOAD_PAYEES,
-      payees
+      payees,
     });
     return payees;
   };
 }
 
 export function initiallyLoadPayees() {
-  return async function(dispatch, getState) {
+  return async function (dispatch, getState) {
     if (getState().queries.payees.length === 0) {
       return dispatch(getPayees());
     }
@@ -198,7 +209,7 @@ export function createPayee(name) {
 }
 
 export function getAccounts() {
-  return async function(dispatch) {
+  return async function (dispatch) {
     const accounts = await send('accounts-get');
     dispatch({ type: constants.LOAD_ACCOUNTS, accounts });
     return accounts;
@@ -206,14 +217,14 @@ export function getAccounts() {
 }
 
 export function updateAccount(account) {
-  return async function(dispatch) {
+  return async function (dispatch) {
     dispatch({ type: constants.UPDATE_ACCOUNT, account });
     await send('account-update', account);
   };
 }
 
 export function createAccount(name, type, balance, offBudget) {
-  return async function(dispatch) {
+  return async function (dispatch) {
     let id = await send('account-create', { name, type, balance, offBudget });
     await dispatch(getAccounts());
     await dispatch(getPayees());
@@ -222,38 +233,38 @@ export function createAccount(name, type, balance, offBudget) {
 }
 
 export function openAccountCloseModal(accountId) {
-  return async function(dispatch, getState) {
+  return async function (dispatch, getState) {
     const { balance, numTransactions } = await send('account-properties', {
-      id: accountId
+      id: accountId,
     });
     const account = getState().queries.accounts.find(
-      acct => acct.id === accountId
+      acct => acct.id === accountId,
     );
 
     dispatch(
       pushModal('close-account', {
         account,
         balance,
-        canDelete: numTransactions === 0
-      })
+        canDelete: numTransactions === 0,
+      }),
     );
   };
 }
 
 export function closeAccount(accountId, transferAccountId, categoryId, forced) {
-  return async function(dispatch) {
+  return async function (dispatch) {
     await send('account-close', {
       id: accountId,
       transferAccountId,
       categoryId,
-      forced
+      forced,
     });
     dispatch(getAccounts());
   };
 }
 
 export function reopenAccount(accountId) {
-  return async function(dispatch) {
+  return async function (dispatch) {
     await send('account-reopen', { id: accountId });
     dispatch(getAccounts());
   };

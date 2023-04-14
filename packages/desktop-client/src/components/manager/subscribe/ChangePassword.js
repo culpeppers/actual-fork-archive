@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
-import { useDispatch } from 'react-redux';
 import { useHistory } from 'react-router-dom';
 
 import { send } from 'loot-core/src/platform/client/fetch';
-import { View, Text, Button } from 'loot-design/src/components/common';
-import { colors } from 'loot-design/src/style';
+
+import { colors } from '../../../style';
+import { View, Text, Button } from '../../common';
 
 import { Title } from './common';
 import { ConfirmPasswordForm } from './ConfirmPasswordForm';
 
 export default function ChangePassword() {
-  let dispatch = useDispatch();
   let history = useHistory();
   let [error, setError] = useState(null);
   let [msg, setMessage] = useState(null);
@@ -36,22 +35,20 @@ export default function ChangePassword() {
       setError(error);
     } else {
       setMessage('Password successfully changed');
-
-      setTimeout(() => {
-        history.push('/');
-      }, 1500);
+      await send('subscribe-sign-in', { password });
+      history.push('/');
     }
   }
 
   return (
     <>
-      <View style={{ width: 500, marginTop: -30 }}>
+      <View style={{ maxWidth: 500, marginTop: -30 }}>
         <Title text="Change server password" />
         <Text
           style={{
             fontSize: 16,
             color: colors.n2,
-            lineHeight: 1.4
+            lineHeight: 1.4,
           }}
         >
           This will change the password for this server instance. All existing
@@ -64,7 +61,7 @@ export default function ChangePassword() {
               marginTop: 20,
               color: colors.r4,
               borderRadius: 4,
-              fontSize: 15
+              fontSize: 15,
             }}
           >
             {getErrorMessage(error)}
@@ -77,7 +74,7 @@ export default function ChangePassword() {
               marginTop: 20,
               color: colors.g4,
               borderRadius: 4,
-              fontSize: 15
+              fontSize: 15,
             }}
           >
             {msg}

@@ -1,19 +1,18 @@
 import React, { useState } from 'react';
 import { useDispatch } from 'react-redux';
-import { useHistory } from 'react-router-dom';
 
 import { createBudget } from 'loot-core/src/client/actions/budgets';
 import { loggedIn } from 'loot-core/src/client/actions/user';
 import { send } from 'loot-core/src/platform/client/fetch';
-import { View, Text, Button } from 'loot-design/src/components/common';
-import { colors } from 'loot-design/src/style';
+
+import { colors } from '../../../style';
+import { View, Text, Button, P } from '../../common';
 
 import { useBootstrapped, Title } from './common';
 import { ConfirmPasswordForm } from './ConfirmPasswordForm';
 
 export default function Bootstrap() {
   let dispatch = useDispatch();
-  let history = useHistory();
   let [error, setError] = useState(null);
 
   let { checked } = useBootstrapped();
@@ -27,7 +26,7 @@ export default function Bootstrap() {
       case 'network-failure':
         return 'Unable to contact the server';
       default:
-        return "Whoops, an error occurred on our side! We'll try to get it fixed soon.";
+        return `An unknown error occurred: ${error}`;
     }
   }
 
@@ -52,17 +51,26 @@ export default function Bootstrap() {
 
   return (
     <>
-      <View style={{ width: 450, marginTop: -30 }}>
-        <Title text="Bootstrap this Actual instance" />
-        <Text
-          style={{
-            fontSize: 16,
-            color: colors.n2,
-            lineHeight: 1.4
-          }}
-        >
-          Set a password for this server instance
-        </Text>
+      <View style={{ maxWidth: 450, marginTop: -30 }}>
+        <Title text="Welcome to Actual!" />
+        <P style={{ fontSize: 16, color: colors.n2 }}>
+          Actual is a super fast privacy-focused app for managing your finances.
+          To secure your data, you’ll need to set a password for your server.
+        </P>
+
+        <P isLast style={{ fontSize: 16, color: colors.n2 }}>
+          Consider opening{' '}
+          <a
+            href="https://actualbudget.github.io/docs/Getting-Started/using-actual/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: colors.b4 }}
+          >
+            our tour
+          </a>{' '}
+          in a new tab for some guidance on what to do when you’ve set your
+          password.
+        </P>
 
         {error && (
           <Text
@@ -70,7 +78,7 @@ export default function Bootstrap() {
               marginTop: 20,
               color: colors.r4,
               borderRadius: 4,
-              fontSize: 15
+              fontSize: 15,
             }}
           >
             {getErrorMessage(error)}

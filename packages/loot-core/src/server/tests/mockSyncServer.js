@@ -1,9 +1,7 @@
-import dateFns from 'date-fns';
-
 import { makeClock, Timestamp, merkle } from '../crdt';
+import * as SyncPb from '../sync/proto/sync_pb';
 
-const SyncPb = require('../sync/proto/sync_pb');
-const defaultMockData = require('./mockData').basic;
+import { basic as defaultMockData } from './mockData';
 
 const handlers = {};
 let currentMockData = defaultMockData;
@@ -42,12 +40,12 @@ handlers['/sync/sync'] = async data => {
       currentMessages.push({
         timestamp: msg.getTimestamp(),
         is_encrypted: msg.getIsencrypted(),
-        content: msg.getContent()
+        content: msg.getContent(),
       });
 
       currentClock.merkle = merkle.insert(
         currentClock.merkle,
-        Timestamp.parse(msg.getTimestamp())
+        Timestamp.parse(msg.getTimestamp()),
       );
     }
   });
@@ -82,38 +80,38 @@ handlers['/plaid/transactions'] = ({
   start_date,
   end_date,
   count,
-  offset
+  offset,
 }) => {
   const accounts = currentMockData.accounts;
   const transactions = currentMockData.transactions[account_id].filter(
-    t => t.date >= start_date && t.date <= end_date
+    t => t.date >= start_date && t.date <= end_date,
   );
 
   return {
     accounts: accounts.filter(acct => acct.account_id === account_id),
     transactions: transactions.slice(offset, offset + count),
-    total_transactions: transactions.length
+    total_transactions: transactions.length,
   };
 };
 
-module.exports.filterMockData = func => {
+export const filterMockData = func => {
   let copied = JSON.parse(JSON.stringify(defaultMockData));
   currentMockData = func(copied);
 };
 
-module.exports.reset = () => {
+export const reset = () => {
   currentMockData = defaultMockData;
   currentClock = makeClock(new Timestamp(0, 0, '0000000000000000'));
   currentMessages = [];
 };
 
-module.exports.getClock = () => {
+export const getClock = () => {
   return currentClock;
 };
 
-module.exports.getMessages = () => {
+export const getMessages = () => {
   return currentMessages.map(msg => {
-    let { timestamp, is_encrypted, content } = msg;
+    let { timestamp, content } = msg;
     let fields = SyncPb.Message.deserializeBinary(content);
 
     return {
@@ -121,20 +119,17 @@ module.exports.getMessages = () => {
       dataset: fields.getDataset(),
       row: fields.getRow(),
       column: fields.getColumn(),
-      value: deserializeValue(fields.getValue())
+      value: deserializeValue(fields.getValue()),
     };
   });
 };
 
-module.exports.handlers = handlers;
-
-function handleRequest(url, data) {
+export const handleRequest = (url, data) => {
   url = url.replace(/http(s)?:\/\/[^/]*/, '');
   if (!handlers[url]) {
     throw new Error('No url handler for ' + url);
   }
   return Promise.resolve(handlers[url](data));
-}
+};
 
-module.exports.handleRequest = handleRequest;
-module.exports.handleRequestBinary = handleRequest;
+export { handlers, handleRequest as handleRequestBinary };

@@ -6,11 +6,12 @@ import { css } from 'glamor';
 import * as actions from 'loot-core/src/client/actions';
 import {
   init as initConnection,
-  send
+  send,
 } from 'loot-core/src/platform/client/fetch';
-import { styles, hasHiddenScrollbars } from 'loot-design/src/style';
 
 import installPolyfills from '../polyfills';
+import { styles, hasHiddenScrollbars } from '../style';
+
 import AppBackground from './AppBackground';
 import FatalError from './FatalError';
 import FinancesApp from './FinancesApp';
@@ -22,7 +23,7 @@ class App extends React.Component {
   state = {
     fatalError: null,
     initializing: true,
-    hiddenScrollbars: hasHiddenScrollbars()
+    hiddenScrollbars: hasHiddenScrollbars(),
   };
 
   async init() {
@@ -40,7 +41,7 @@ class App extends React.Component {
     }
 
     // Load any global prefs
-    let globalPrefs = await this.props.loadGlobalPrefs();
+    await this.props.loadGlobalPrefs();
 
     // Open the last opened budget, if any
     const budgetId = await send('get-last-opened-backup');
@@ -74,10 +75,7 @@ class App extends React.Component {
     this.cleanup = () => window.removeEventListener('focus', checkScrollbars);
   }
 
-  componentDidCatch(error, errorInfo) {
-    if (process.env.NODE_ENV !== 'development') {
-      window.SentryClient.captureException(error, { extra: errorInfo });
-    }
+  componentDidCatch(error) {
     this.setState({ fatalError: error });
   }
 
@@ -88,7 +86,7 @@ class App extends React.Component {
   }
 
   render() {
-    const { budgetId, loadingText, showingTutorial } = this.props;
+    const { budgetId, loadingText } = this.props;
     const { fatalError, initializing, hiddenScrollbars } = this.state;
 
     return (
@@ -98,9 +96,9 @@ class App extends React.Component {
           {
             height: '100%',
             backgroundColor: '#E8ECF0',
-            overflow: 'hidden'
+            overflow: 'hidden',
           },
-          styles.lightScrollbar
+          styles.lightScrollbar,
         ])}
       >
         {fatalError ? (
@@ -116,13 +114,13 @@ class App extends React.Component {
         ) : budgetId ? (
           <FinancesApp />
         ) : (
-          <React.Fragment>
+          <>
             <AppBackground
               initializing={initializing}
               loadingText={loadingText}
             />
-            <ManagementApp />
-          </React.Fragment>
+            <ManagementApp isLoading={loadingText != null} />
+          </>
         )}
 
         <UpdateNotification />
@@ -137,7 +135,6 @@ export default connect(
     budgetId: state.prefs.local && state.prefs.local.id,
     cloudFileId: state.prefs.local && state.prefs.local.cloudFileId,
     loadingText: state.app.loadingText,
-    showingTutorial: state.tutorial.stage !== null
   }),
-  actions
+  actions,
 )(App);

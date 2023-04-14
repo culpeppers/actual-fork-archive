@@ -1,18 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { connect } from 'react-redux';
-import { useHistory, withRouter } from 'react-router';
+import { withRouter } from 'react-router';
 
 import * as actions from 'loot-core/src/client/actions';
-import {
-  View,
-  Text,
-  Button,
-  Tooltip,
-  Menu
-} from 'loot-design/src/components/common';
-import { colors } from 'loot-design/src/style';
 
-import { useServerURL } from '../hooks/useServerURL';
+import { colors } from '../style';
+
+import { View, Text, Button, Tooltip, Menu } from './common';
+import { useServerURL } from './ServerContext';
 
 function LoggedInUser({
   files,
@@ -24,12 +19,11 @@ function LoggedInUser({
   pushModal,
   closeBudget,
   style,
-  color
+  color,
 }) {
   let [loading, setLoading] = useState(true);
   let [menuOpen, setMenuOpen] = useState(false);
   const serverUrl = useServerURL();
-  const history = useHistory();
 
   useEffect(() => {
     getUserData().then(() => setLoading(false));
@@ -37,7 +31,7 @@ function LoggedInUser({
 
   async function onChangePassword() {
     await closeBudget();
-    history.push('/change-password');
+    window.__history.push('/change-password');
   }
 
   function onMenuSelect(type) {
@@ -54,11 +48,15 @@ function LoggedInUser({
     }
   }
 
-  function onClick() {
-    if (serverUrl) {
+  async function onClick() {
+    if (!serverUrl) {
+      await closeBudget();
+      window.__history.push('/config-server');
+    } else if (userData) {
       setMenuOpen(true);
     } else {
-      history.push('/config-server');
+      await closeBudget();
+      window.__history.push('/login');
     }
   }
 
@@ -89,7 +87,7 @@ function LoggedInUser({
               onMenuSelect={onMenuSelect}
               items={[
                 { name: 'change-password', text: 'Change password' },
-                { name: 'sign-out', text: 'Sign out' }
+                { name: 'sign-out', text: 'Sign out' },
               ]}
             />
           </Tooltip>
@@ -97,7 +95,11 @@ function LoggedInUser({
       </View>
     );
   } else {
-    return <View style={[{ color }, style]}>Not logged in</View>;
+    return (
+      <Button bare onClick={onClick} style={[{ color }, style]}>
+        Not logged in
+      </Button>
+    );
   }
 }
 
@@ -105,7 +107,7 @@ export default connect(
   state => ({
     userData: state.user.data,
     files: state.budgets.allFiles,
-    budgetId: state.prefs.local && state.prefs.local.id
+    budgetId: state.prefs.local && state.prefs.local.id,
   }),
-  actions
+  actions,
 )(withRouter(LoggedInUser));

@@ -2,15 +2,14 @@
 // them which doesn't play well with CSP. There isn't great, and eventually
 // we can remove this migration.
 import m1632571489012 from '../../../migrations/1632571489012_remove_cache.js';
-import fs from '../../platform/server/fs';
+import * as fs from '../../platform/server/fs';
 import * as sqlite from '../../platform/server/sqlite';
-
-const uuid = require('../../platform/uuid');
+import * as uuid from '../../platform/uuid';
 
 let MIGRATIONS_DIR = fs.migrationsPath;
 
 let javascriptMigrations = {
-  1632571489012: m1632571489012
+  1632571489012: m1632571489012,
 };
 
 export async function withMigrationsDir(dir, func) {
@@ -41,7 +40,7 @@ export async function getAppliedMigrations(db) {
     db,
     'SELECT * FROM __migrations__ ORDER BY id ASC',
     [],
-    true
+    true,
   );
   return rows.map(row => row.id);
 }
@@ -74,7 +73,7 @@ async function applyJavaScript(db, id) {
     runQuery: (query, params, fetchAll) =>
       sqlite.runQuery(db, query, params, fetchAll),
     execQuery: query => sqlite.execQuery(db, query),
-    transaction: func => sqlite.transaction(db, func)
+    transaction: func => sqlite.transaction(db, func),
   };
 
   if (javascriptMigrations[id] == null) {
@@ -102,7 +101,7 @@ export async function applyMigration(db, name, migrationsDir) {
     await applySql(db, code);
   }
   await sqlite.runQuery(db, 'INSERT INTO __migrations__ (id) VALUES (?)', [
-    getMigrationId(name)
+    getMigrationId(name),
   ]);
 }
 

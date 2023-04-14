@@ -1,11 +1,11 @@
 import { captureBreadcrumb } from '../platform/exceptions';
 import * as sqlite from '../platform/server/sqlite';
 import { sheetForMonth } from '../shared/months';
-import Platform from './platform';
+
+import * as Platform from './platform';
 import * as prefs from './prefs';
 import Spreadsheet from './spreadsheet/spreadsheet';
-
-const { resolveName } = require('./spreadsheet/util');
+import { resolveName } from './spreadsheet/util';
 
 let globalSheet, globalOnChange;
 let globalCacheDb;
@@ -24,7 +24,7 @@ async function updateSpreadsheetCache(rawDb, names) {
         sqlite.runQuery(
           rawDb,
           'INSERT OR REPLACE INTO kvcache (key, value) VALUES (?, ?)',
-          [name, JSON.stringify(node.value)]
+          [name, JSON.stringify(node.value)],
         );
       }
     });
@@ -38,14 +38,14 @@ function setCacheStatus(mainDb, cacheDb, { clean }) {
     sqlite.runQuery(
       cacheDb,
       'INSERT OR REPLACE INTO kvcache_key (id, key) VALUES (1, ?)',
-      [num]
+      [num],
     );
 
     if (mainDb) {
       sqlite.runQuery(
         mainDb,
         'INSERT OR REPLACE INTO kvcache_key (id, key) VALUES (1, ?)',
-        [num]
+        [num],
       );
     }
   } else {
@@ -58,7 +58,7 @@ function isCacheDirty(mainDb, cacheDb) {
     cacheDb,
     'SELECT key FROM kvcache_key WHERE id = 1',
     [],
-    true
+    true,
   );
   let num = rows.length === 0 ? null : rows[0].key;
 
@@ -71,7 +71,7 @@ function isCacheDirty(mainDb, cacheDb) {
       mainDb,
       'SELECT key FROM kvcache_key WHERE id = 1',
       [],
-      true
+      true,
     );
     if (rows.length === 0 || rows[0].key !== num) {
       return true;
@@ -85,7 +85,7 @@ function isCacheDirty(mainDb, cacheDb) {
 }
 
 export async function loadSpreadsheet(db, onSheetChange) {
-  let cacheEnabled = !global.__TESTING__;
+  let cacheEnabled = process.env.NODE_ENV !== 'test';
   let mainDb = db.getDatabase();
   let cacheDb;
 
@@ -102,7 +102,7 @@ export async function loadSpreadsheet(db, onSheetChange) {
       `
         CREATE TABLE IF NOT EXISTS kvcache (key TEXT PRIMARY KEY, value TEXT);
         CREATE TABLE IF NOT EXISTS kvcache_key (id INTEGER PRIMARY KEY, key REAL)
-      `
+      `,
     );
   } else {
     // All other platforms use the same database for cache
@@ -113,7 +113,7 @@ export async function loadSpreadsheet(db, onSheetChange) {
   if (cacheEnabled) {
     sheet = new Spreadsheet(
       updateSpreadsheetCache.bind(null, cacheDb),
-      setCacheStatus.bind(null, mainDb, cacheDb)
+      setCacheStatus.bind(null, mainDb, cacheDb),
     );
   } else {
     sheet = new Spreadsheet();
@@ -121,7 +121,7 @@ export async function loadSpreadsheet(db, onSheetChange) {
 
   captureBreadcrumb({
     message: 'loading spreaadsheet',
-    category: 'server'
+    category: 'server',
   });
 
   globalSheet = sheet;
@@ -136,7 +136,7 @@ export async function loadSpreadsheet(db, onSheetChange) {
       cacheDb,
       'SELECT * FROM kvcache',
       [],
-      true
+      true,
     );
     console.log(`Loaded spreadsheet from cache (${cachedRows.length} items)`);
 
@@ -151,7 +151,7 @@ export async function loadSpreadsheet(db, onSheetChange) {
 
   captureBreadcrumb({
     message: 'loaded spreaadsheet',
-    category: 'server'
+    category: 'server',
   });
 
   return sheet;
@@ -201,7 +201,7 @@ export async function loadUserBudgets(db) {
       sheet.set(`${sheetName}!budget-${budget.category}`, budget.amount);
       sheet.set(
         `${sheetName}!carryover-${budget.category}`,
-        budget.carryover === 1 ? true : false
+        budget.carryover === 1 ? true : false,
       );
     }
   }

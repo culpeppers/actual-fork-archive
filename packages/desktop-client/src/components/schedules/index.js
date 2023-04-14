@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useHistory } from 'react-router-dom';
 
 import { useSchedules } from 'loot-core/src/client/data-hooks/schedules';
 import { send } from 'loot-core/src/platform/client/fetch';
-import { View, Button } from 'loot-design/src/components/common';
 
+import { View, Button, Search } from '../common';
 import { Page } from '../Page';
+
 import { SchedulesTable, ROW_HEIGHT } from './SchedulesTable';
 
 export default function Schedules() {
   let history = useHistory();
+
+  let [filter, setFilter] = useState('');
 
   let scheduleData = useSchedules();
 
@@ -27,6 +30,10 @@ export default function Schedules() {
     history.push(`/schedule/edit`, { locationPtr: history.location });
   }
 
+  function onDiscover() {
+    history.push(`/schedule/discover`, { locationPtr: history.location });
+  }
+
   async function onAction(name, id) {
     switch (name) {
       case 'post-transaction':
@@ -41,7 +48,7 @@ export default function Schedules() {
       case 'restart':
         await send('schedule/update', {
           schedule: { id, completed: false },
-          resetNextDate: true
+          resetNextDate: true,
         });
         break;
       case 'delete':
@@ -53,15 +60,24 @@ export default function Schedules() {
 
   return (
     <Page title="Schedules">
+      <View style={{ alignItems: 'flex-end' }}>
+        <Search
+          placeholder="Filter schedules…"
+          value={filter}
+          onChange={setFilter}
+        />
+      </View>
+
       <View
         style={{
           marginTop: 20,
           flexBasis: (ROW_HEIGHT - 1) * (Math.max(schedules.length, 1) + 1),
-          overflow: 'hidden'
+          overflow: 'hidden',
         }}
       >
         <SchedulesTable
           schedules={schedules}
+          filter={filter}
           statuses={statuses}
           allowCompleted={true}
           onSelect={onEdit}
@@ -70,7 +86,15 @@ export default function Schedules() {
         />
       </View>
 
-      <View style={{ alignItems: 'flex-end', margin: '20px 0', flexShrink: 0 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          margin: '20px 0',
+          flexShrink: 0,
+        }}
+      >
+        <Button onClick={onDiscover}>Find schedules</Button>
         <Button primary onClick={onAdd}>
           Add new schedule
         </Button>

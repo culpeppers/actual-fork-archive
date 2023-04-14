@@ -1,4 +1,4 @@
-const dateFns = require('date-fns');
+import * as dateFns from 'date-fns';
 
 const AlwaysTrue = Symbol('AlwaysTrue');
 let shouldLog = false;
@@ -21,12 +21,12 @@ function bind(args, func) {
 }
 
 const builtinFuncs = {
-  concat: function(str1, str2) {
+  concat: function (str1, str2) {
     return str1 + str2;
   },
-  date: function(str) {
+  date: function (str) {
     return dateFns.parseISO(str);
-  }
+  },
 };
 
 function interpretExpr(expr, context) {
@@ -184,4 +184,4 @@ function interpret(where, row, table) {
   return ret;
 }
 
-module.exports = interpret;
+export default interpret;

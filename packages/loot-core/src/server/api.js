@@ -1,18 +1,25 @@
+import * as connection from '../platform/server/connection';
+import {
+  getDownloadError,
+  getSyncError,
+  getTestKeyError,
+} from '../shared/errors';
 import * as monthUtils from '../shared/months';
 import q from '../shared/query';
 import {
   ungroupTransactions,
   updateTransaction,
-  deleteTransaction
+  deleteTransaction,
 } from '../shared/transactions';
 import { integerToAmount } from '../shared/util';
+
 import { addTransactions } from './accounts/sync';
 import {
   accountModel,
   categoryModel,
   categoryGroupModel,
   payeeModel,
-  payeeRuleModel
+  payeeRuleModel,
 } from './api-models';
 import { runQuery as aqlQuery } from './aql';
 import * as cloudStorage from './cloud-storage';
@@ -22,8 +29,6 @@ import { runMutator } from './mutators';
 import * as prefs from './prefs';
 import * as sheet from './sheet';
 import { setSyncingMode, batchMessages } from './sync';
-
-const connection = require('../platform/server/connection');
 
 let IMPORT_MODE = false;
 
@@ -45,20 +50,20 @@ function withMutation(handler) {
 
         let rows = await db.all(
           'SELECT DISTINCT dataset FROM messages_crdt WHERE timestamp > ?',
-          [latestTimestamp]
+          [latestTimestamp],
         );
 
         // Only send the sync event if anybody else is connected
         if (connection.getNumClients() > 1) {
           connection.send('sync-event', {
             type: 'success',
-            tables: rows.map(row => row.dataset)
+            tables: rows.map(row => row.dataset),
           });
         }
 
         return result;
       },
-      { undoDisabled: true }
+      { undoDisabled: true },
     );
   };
 }
@@ -85,21 +90,21 @@ async function validateExpenseCategory(debug, id) {
   }
 
   let row = await db.first('SELECT is_income FROM categories WHERE id = ?', [
-    id
+    id,
   ]);
 
   if (!row) {
-    throw APIError(`${debug}: category "${id}" does not exist`);
+    throw APIError(`${debug}: category “${id}” does not exist`);
   }
 
   if (row.is_income !== 0) {
-    throw APIError(`${debug}: category "${id}" is not an expense category`);
+    throw APIError(`${debug}: category “${id}” is not an expense category`);
   }
 }
 
 let batchPromise = null;
 
-handlers['api/batch-budget-start'] = async function() {
+handlers['api/batch-budget-start'] = async function () {
   if (batchPromise) {
     throw APIError('Cannot start a batch process: batch already started');
   }
@@ -122,7 +127,7 @@ handlers['api/batch-budget-start'] = async function() {
   }
 };
 
-handlers['api/batch-budget-end'] = async function() {
+handlers['api/batch-budget-end'] = async function () {
   if (!batchPromise) {
     throw APIError('Cannot end a batch process: no batch started');
   }
@@ -131,7 +136,7 @@ handlers['api/batch-budget-end'] = async function() {
   batchPromise = null;
 };
 
-handlers['api/load-budget'] = async function({ id }) {
+handlers['api/load-budget'] = async function ({ id }) {
   let { id: currentId } = prefs.getPrefs() || {};
 
   if (currentId !== id) {
@@ -143,24 +148,58 @@ handlers['api/load-budget'] = async function({ id }) {
     } else {
       connection.send('show-budgets');
 
-      if (error === 'out-of-sync-migrations' || error === 'out-of-sync-data') {
-        throw new Error(
-          'This budget cannot be loaded with this version of the app.'
-        );
-      } else if (error === 'budget-not-found') {
-        throw new Error(
-          'Budget "' +
-            id +
-            '" not found. Check the id of your budget in the "Advanced" section of the settings page.'
-        );
-      } else {
-        throw new Error('We had an unknown problem opening "' + id + '".');
-      }
+      throw new Error(getSyncError(error, id));
     }
   }
 };
 
-handlers['api/start-import'] = async function({ budgetName }) {
+handlers['api/download-budget'] = async function ({ syncId, password }) {
+  let { id: currentId } = prefs.getPrefs() || {};
+  if (currentId) {
+    await handlers['close-budget']();
+  }
+
+  let localBudget = (await handlers['get-budgets']()).find(
+    b => b.groupId === syncId,
+  );
+  if (localBudget) {
+    await handlers['load-budget']({ id: localBudget.id });
+    let result = await handlers['sync-budget']({ id: localBudget.id });
+    if (result.error) {
+      throw new Error(getSyncError(result.error, localBudget.id));
+    }
+  } else {
+    let files = await handlers['get-remote-files']();
+    let file = files.find(f => f.groupId === syncId);
+    if (!file) {
+      throw new Error(
+        `Budget “${syncId}” not found. Check the sync id of your budget in the Advanced section of the settings page.`,
+      );
+    }
+    if (file.encryptKeyId && !password) {
+      throw new Error(
+        `File ${file.name} is encrypted. Please provide a password.`,
+      );
+    }
+    if (password) {
+      let result = await handlers['key-test']({
+        fileId: file.fileId,
+        password,
+      });
+      if (result.error) {
+        throw new Error(getTestKeyError(result.error));
+      }
+    }
+
+    let result = await handlers['download-budget']({ fileId: file.fileId });
+    if (result.error) {
+      throw new Error(getDownloadError(result.error, result.id));
+    }
+    await handlers['load-budget']({ id: result.id });
+  }
+};
+
+handlers['api/start-import'] = async function ({ budgetName }) {
   // Notify UI to close budget
   await handlers['close-budget']();
 
@@ -178,7 +217,7 @@ handlers['api/start-import'] = async function({ budgetName }) {
   IMPORT_MODE = true;
 };
 
-handlers['api/finish-import'] = async function() {
+handlers['api/finish-import'] = async function () {
   sheet.get().markCacheDirty();
 
   // We always need to fully reload the app. Importing doesn't touch
@@ -197,7 +236,7 @@ handlers['api/finish-import'] = async function() {
   IMPORT_MODE = false;
 };
 
-handlers['api/abort-import'] = async function() {
+handlers['api/abort-import'] = async function () {
   if (IMPORT_MODE) {
     let { id } = prefs.getPrefs();
 
@@ -209,16 +248,16 @@ handlers['api/abort-import'] = async function() {
   IMPORT_MODE = false;
 };
 
-handlers['api/query'] = async function({ query }) {
+handlers['api/query'] = async function ({ query }) {
   return aqlQuery(query);
 };
 
-handlers['api/budget-months'] = async function() {
+handlers['api/budget-months'] = async function () {
   let { start, end } = await handlers['get-budget-bounds']();
   return monthUtils.range(start, end);
 };
 
-handlers['api/budget-month'] = async function({ month }) {
+handlers['api/budget-month'] = async function ({ month }) {
   await validateMonth(month);
 
   let groups = await db.getCategoriesGrouped();
@@ -252,8 +291,8 @@ handlers['api/budget-month'] = async function({ month }) {
 
           categories: group.categories.map(cat => ({
             ...categoryModel.toExternal(cat),
-            received: value(`sum-amount-${cat.id}`)
-          }))
+            received: value(`sum-amount-${cat.id}`),
+          })),
         };
       }
 
@@ -268,70 +307,70 @@ handlers['api/budget-month'] = async function({ month }) {
           budgeted: value(`budget-${cat.id}`),
           spent: value(`sum-amount-${cat.id}`),
           balance: value(`leftover-${cat.id}`),
-          carryover: value(`carryover-${cat.id}`)
-        }))
+          carryover: value(`carryover-${cat.id}`),
+        })),
       };
-    })
+    }),
   };
 };
 
-handlers['api/budget-set-amount'] = withMutation(async function({
+handlers['api/budget-set-amount'] = withMutation(async function ({
   month,
   categoryId,
-  amount
+  amount,
 }) {
   return handlers['budget/budget-amount']({
     month,
     category: categoryId,
-    amount
+    amount,
   });
 });
 
-handlers['api/budget-set-carryover'] = withMutation(async function({
+handlers['api/budget-set-carryover'] = withMutation(async function ({
   month,
   categoryId,
-  flag
+  flag,
 }) {
   await validateMonth(month);
   await validateExpenseCategory('budget-set-carryover', categoryId);
   return handlers['budget/set-carryover']({
     startMonth: month,
     category: categoryId,
-    flag
+    flag,
   });
 });
 
-handlers['api/transactions-export'] = async function({
+handlers['api/transactions-export'] = async function ({
   transactions,
   categoryGroups,
-  payees
+  payees,
 }) {
   return handlers['transactions-export']({
     transactions,
     categoryGroups,
-    payees
+    payees,
   });
 };
 
-handlers['api/transactions-import'] = withMutation(async function({
+handlers['api/transactions-import'] = withMutation(async function ({
   accountId,
-  transactions
+  transactions,
 }) {
   return handlers['transactions-import']({ accountId, transactions });
 });
 
-handlers['api/transactions-add'] = withMutation(async function({
+handlers['api/transactions-add'] = withMutation(async function ({
   accountId,
-  transactions
+  transactions,
 }) {
   await addTransactions(accountId, transactions, { runTransfers: false });
   return 'ok';
 });
 
-handlers['api/transactions-get'] = async function({
+handlers['api/transactions-get'] = async function ({
   accountId,
   startDate,
-  endDate
+  endDate,
 }) {
   let { data } = await aqlQuery(
     q('transactions')
@@ -339,28 +378,25 @@ handlers['api/transactions-get'] = async function({
         $and: [
           accountId && { account: accountId },
           startDate && { date: { $gte: startDate } },
-          endDate && { date: { $lte: endDate } }
-        ].filter(Boolean)
+          endDate && { date: { $lte: endDate } },
+        ].filter(Boolean),
       })
       .select('*')
-      .options({ splits: 'grouped' })
+      .options({ splits: 'grouped' }),
   );
   return data;
 };
 
-handlers['api/transactions-filter'] = async function({ text, accountId }) {
+handlers['api/transactions-filter'] = async function ({ text, accountId }) {
   throw new Error('`filterTransactions` is deprecated, use `runQuery` instead');
 };
 
-handlers['api/transaction-update'] = withMutation(async function({
+handlers['api/transaction-update'] = withMutation(async function ({
   id,
-  fields
+  fields,
 }) {
   let { data } = await aqlQuery(
-    q('transactions')
-      .filter({ id })
-      .select('*')
-      .options({ splits: 'grouped' })
+    q('transactions').filter({ id }).select('*').options({ splits: 'grouped' }),
   );
   let transactions = ungroupTransactions(data);
 
@@ -372,12 +408,9 @@ handlers['api/transaction-update'] = withMutation(async function({
   return handlers['transactions-batch-update'](diff);
 });
 
-handlers['api/transaction-delete'] = withMutation(async function({ id }) {
+handlers['api/transaction-delete'] = withMutation(async function ({ id }) {
   let { data } = await aqlQuery(
-    q('transactions')
-      .filter({ id })
-      .select('*')
-      .options({ splits: 'grouped' })
+    q('transactions').filter({ id }).select('*').options({ splits: 'grouped' }),
   );
   let transactions = ungroupTransactions(data);
 
@@ -389,14 +422,14 @@ handlers['api/transaction-delete'] = withMutation(async function({ id }) {
   return handlers['transactions-batch-update'](diff);
 });
 
-handlers['api/accounts-get'] = async function() {
+handlers['api/accounts-get'] = async function () {
   let accounts = await db.getAccounts();
   return accounts.map(account => accountModel.toExternal(account));
 };
 
-handlers['api/account-create'] = withMutation(async function({
+handlers['api/account-create'] = withMutation(async function ({
   account,
-  initialBalance = null
+  initialBalance = null,
 }) {
   return handlers['account-create']({
     name: account.name,
@@ -405,140 +438,142 @@ handlers['api/account-create'] = withMutation(async function({
     closed: account.closed,
     // Current the API expects an amount but it really should expect
     // an integer
-    balance: initialBalance != null ? integerToAmount(initialBalance) : null
+    balance: initialBalance != null ? integerToAmount(initialBalance) : null,
   });
 });
 
-handlers['api/account-update'] = withMutation(async function({ id, fields }) {
+handlers['api/account-update'] = withMutation(async function ({ id, fields }) {
   return db.updateAccount({ id, ...accountModel.fromExternal(fields) });
 });
 
-handlers['api/account-close'] = withMutation(async function({
+handlers['api/account-close'] = withMutation(async function ({
   id,
   transferAccountId,
-  transferCategoryId
+  transferCategoryId,
 }) {
   return handlers['account-close']({
     id,
     transferAccountId,
-    categoryId: transferCategoryId
+    categoryId: transferCategoryId,
   });
 });
 
-handlers['api/account-reopen'] = withMutation(async function({ id }) {
+handlers['api/account-reopen'] = withMutation(async function ({ id }) {
   return handlers['account-reopen']({ id });
 });
 
-handlers['api/account-delete'] = withMutation(async function({ id }) {
+handlers['api/account-delete'] = withMutation(async function ({ id }) {
   return handlers['account-close']({ id, forced: true });
 });
 
-handlers['api/categories-get'] = async function({ grouped } = {}) {
+handlers['api/categories-get'] = async function ({ grouped } = {}) {
   let result = await handlers['get-categories']();
   return grouped
     ? result.grouped.map(categoryGroupModel.toExternal)
     : result.list.map(categoryModel.toExternal);
 };
 
-handlers['api/category-group-create'] = withMutation(async function({ group }) {
+handlers['api/category-group-create'] = withMutation(async function ({
+  group,
+}) {
   return handlers['category-group-create']({ name: group.name });
 });
 
-handlers['api/category-group-update'] = withMutation(async function({
+handlers['api/category-group-update'] = withMutation(async function ({
   id,
-  fields
+  fields,
 }) {
   return handlers['category-group-update']({
     id,
-    ...categoryGroupModel.fromExternal(fields)
+    ...categoryGroupModel.fromExternal(fields),
   });
 });
 
-handlers['api/category-group-delete'] = withMutation(async function({
+handlers['api/category-group-delete'] = withMutation(async function ({
   id,
-  transferCategoryId
+  transferCategoryId,
 }) {
   return handlers['category-group-delete']({
     id,
-    transferId: transferCategoryId
+    transferId: transferCategoryId,
   });
 });
 
-handlers['api/category-create'] = withMutation(async function({ category }) {
+handlers['api/category-create'] = withMutation(async function ({ category }) {
   return handlers['category-create']({
     name: category.name,
     groupId: category.group_id,
-    isIncome: category.is_income
+    isIncome: category.is_income,
   });
 });
 
-handlers['api/category-update'] = withMutation(async function({ id, fields }) {
+handlers['api/category-update'] = withMutation(async function ({ id, fields }) {
   return handlers['category-update']({
     id,
-    ...categoryModel.fromExternal(fields)
+    ...categoryModel.fromExternal(fields),
   });
 });
 
-handlers['api/category-delete'] = withMutation(async function({
+handlers['api/category-delete'] = withMutation(async function ({
   id,
-  transferCategoryId
+  transferCategoryId,
 }) {
   return handlers['category-delete']({
     id,
-    transferId: transferCategoryId
+    transferId: transferCategoryId,
   });
 });
 
-handlers['api/payees-get'] = async function() {
+handlers['api/payees-get'] = async function () {
   let payees = await handlers['payees-get']();
   return payees.map(payeeModel.toExternal);
 };
 
-handlers['api/payee-create'] = withMutation(async function({ payee }) {
+handlers['api/payee-create'] = withMutation(async function ({ payee }) {
   return handlers['payee-create']({ name: payee.name });
 });
 
-handlers['api/payee-update'] = withMutation(async function({ id, fields }) {
+handlers['api/payee-update'] = withMutation(async function ({ id, fields }) {
   return handlers['payees-batch-change']({
-    updated: [{ id, ...payeeModel.fromExternal(fields) }]
+    updated: [{ id, ...payeeModel.fromExternal(fields) }],
   });
 });
 
-handlers['api/payee-delete'] = withMutation(async function({ id }) {
+handlers['api/payee-delete'] = withMutation(async function ({ id }) {
   return handlers['payees-batch-change']({ deleted: [{ id }] });
 });
 
-handlers['api/payee-rules-get'] = async function({ payeeId }) {
+handlers['api/payee-rules-get'] = async function ({ payeeId }) {
   let rules = await handlers['payees-get-rules']({ id: payeeId });
   return rules.map(payeeRuleModel.toExternal);
 };
 
-handlers['api/payee-rule-create'] = withMutation(async function({
+handlers['api/payee-rule-create'] = withMutation(async function ({
   payee_id,
-  rule
+  rule,
 }) {
   return handlers['payees-add-rule']({
     payee_id,
     type: rule.type,
-    value: rule.value || null
+    value: rule.value || null,
   });
 });
 
-handlers['api/payee-rule-update'] = withMutation(async function({
+handlers['api/payee-rule-update'] = withMutation(async function ({
   id,
-  fields
+  fields,
 }) {
   return handlers['payees-update-rule']({
     id,
-    ...payeeRuleModel.fromExternal(fields)
+    ...payeeRuleModel.fromExternal(fields),
   });
 });
 
-handlers['api/payee-rule-delete'] = withMutation(async function({ id }) {
+handlers['api/payee-rule-delete'] = withMutation(async function ({ id }) {
   return handlers['payees-delete-rule']({ id });
 });
 
-export default function(serverHandlers) {
+export default function installAPI(serverHandlers) {
   handlers = Object.assign({}, serverHandlers, handlers);
   return handlers;
 }

@@ -1,5 +1,6 @@
 import { send } from '../../platform/client/fetch';
-import constants from '../constants';
+import * as constants from '../constants';
+
 import { loadAllFiles, closeBudget } from './budgets';
 import { loadGlobalPrefs } from './prefs';
 
@@ -9,7 +10,7 @@ export function getUserData() {
 
     dispatch({
       type: constants.GET_USER_DATA,
-      data
+      data,
     });
     return data;
   };
@@ -39,7 +40,7 @@ export function loggedIn() {
 
 export function signOut() {
   return async dispatch => {
-    const data = await send('subscribe-sign-out');
+    await send('subscribe-sign-out');
 
     dispatch(getUserData());
     dispatch(loadGlobalPrefs());

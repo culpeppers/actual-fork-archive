@@ -1,13 +1,13 @@
-import fs from '../platform/server/fs';
+import * as dateFns from 'date-fns';
+
+import * as connection from '../platform/server/connection';
+import * as fs from '../platform/server/fs';
 import * as sqlite from '../platform/server/sqlite';
+import * as uuid from '../platform/uuid';
 import * as monthUtils from '../shared/months';
+
 import * as cloudStorage from './cloud-storage';
 import * as prefs from './prefs';
-
-const dateFns = require('date-fns');
-
-const connection = require('../platform/server/connection');
-const uuid = require('../platform/uuid');
 
 // A special backup that represents the latest version of the db that
 // can be reverted to after loading a backup
@@ -29,9 +29,9 @@ export async function getBackups(id) {
       const mtime = await fs.getModifiedTime(fs.join(backupDir, path));
       return {
         id: path,
-        date: new Date(mtime)
+        date: new Date(mtime),
       };
-    })
+    }),
   );
 
   backups.sort((b1, b2) => {
@@ -52,7 +52,7 @@ export async function getLatestBackup(id) {
     return {
       id: LATEST_BACKUP_FILENAME,
       date: null,
-      isLatest: true
+      isLatest: true,
     };
   }
   return null;
@@ -68,7 +68,7 @@ export async function getAvailableBackups(id) {
 
   backups = backups.map(backup => ({
     ...backup,
-    date: backup.date ? dateFns.format(backup.date, 'yyyy-MM-dd h:mm') : null
+    date: backup.date ? dateFns.format(backup.date, 'yyyy-MM-dd h:mm') : null,
   }));
 
   return backups;
@@ -140,12 +140,12 @@ export async function loadBackup(id, backupId) {
     // current version so the user can easily revert back to it
     await fs.copyFile(
       fs.join(budgetDir, 'db.sqlite'),
-      fs.join(budgetDir, LATEST_BACKUP_FILENAME)
+      fs.join(budgetDir, LATEST_BACKUP_FILENAME),
     );
 
     await fs.copyFile(
       fs.join(budgetDir, 'metadata.json'),
-      fs.join(budgetDir, 'metadata.latest.json')
+      fs.join(budgetDir, 'metadata.latest.json'),
     );
 
     // Restart the backup service to make sure the user has the full
@@ -163,11 +163,11 @@ export async function loadBackup(id, backupId) {
     // backup
     await fs.copyFile(
       fs.join(budgetDir, LATEST_BACKUP_FILENAME),
-      fs.join(budgetDir, 'db.sqlite')
+      fs.join(budgetDir, 'db.sqlite'),
     );
     await fs.copyFile(
       fs.join(budgetDir, 'metadata.latest.json'),
-      fs.join(budgetDir, 'metadata.json')
+      fs.join(budgetDir, 'metadata.json'),
     );
     await fs.removeFile(fs.join(budgetDir, LATEST_BACKUP_FILENAME));
     await fs.removeFile(fs.join(budgetDir, 'metadata.latest.json'));
@@ -188,7 +188,7 @@ export async function loadBackup(id, backupId) {
     await prefs.savePrefs({
       groupId: null,
       lastSyncedTimestamp: null,
-      lastUploaded: null
+      lastUploaded: null,
     });
 
     // Re-upload the new file
@@ -200,7 +200,7 @@ export async function loadBackup(id, backupId) {
 
     await fs.copyFile(
       fs.join(budgetDir, 'backups', backupId),
-      fs.join(budgetDir, 'db.sqlite')
+      fs.join(budgetDir, 'db.sqlite'),
     );
   }
 }

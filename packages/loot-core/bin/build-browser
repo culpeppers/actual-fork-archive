@@ -4,7 +4,13 @@ cd `dirname "$0"`
 ROOT=`pwd -P`
 WEBPACK_ARGS=""
 
-"$ROOT"/copy-migrations
+DATA_DIR="$ROOT"/../../desktop-client/public/data
+mkdir -p "$DATA_DIR"
+"$ROOT"/copy-migrations "$DATA_DIR"
+
+cd "$DATA_DIR"
+find * -type f | sort > ../data-file-index.txt
+cd "$ROOT"
 
 OUTPUT_HASH="[hash]"
 if [ $NODE_ENV == 'development' ]; then
@@ -29,7 +35,7 @@ if [ $NODE_ENV == 'development' ]; then
   ln -snf "$ROOT"/../lib-dist/browser ../../desktop-client/public/kcab
 fi
 
-../node_modules/.bin/webpack --config ../webpack/webpack.browser.config.js \
+yarn webpack --config ../webpack/webpack.browser.config.js \
   --target "webworker" \
   --output-filename "kcab.worker.$OUTPUT_HASH.js" \
   --output-chunkfilename "[id].[name].kcab.worker.$OUTPUT_HASH.js" \

@@ -1,20 +1,23 @@
+import snapshotDiff from 'snapshot-diff';
+
 import * as monthUtils from '../../shared/months';
 import * as db from '../db';
 import { loadMappings } from '../db/mappings';
+import { post } from '../post';
 import { getServer } from '../server-config';
+import * as mockSyncServer from '../tests/mockSyncServer';
+
 import {
   syncAccount,
   reconcileTransactions,
   addTransactions,
-  fromPlaid
+  fromPlaid,
 } from './sync';
 import { loadRules, insertRule } from './transaction-rules';
 import * as transfer from './transfer';
 
-const snapshotDiff = require('snapshot-diff');
-
-const { post } = require('../post');
-const mockSyncServer = require('../tests/mockSyncServer');
+const papaJohns = 'Papa Johns east side';
+const lowes = 'Lowe’s Store';
 
 beforeEach(async () => {
   mockSyncServer.reset();
@@ -29,7 +32,7 @@ function getAllTransactions() {
        FROM v_transactions_internal t
        LEFT JOIN payees p ON p.id = t.payee
        ORDER BY date DESC, amount DESC, id
-     `
+     `,
   );
 }
 
@@ -40,7 +43,7 @@ function expectSnapshotWithDiffer(initialValue) {
     expectToMatchDiff: value => {
       expect(snapshotDiff(currentValue, value)).toMatchSnapshot();
       currentValue = value;
-    }
+    },
   };
 }
 
@@ -53,12 +56,12 @@ function prepMockTransactions() {
     mockTransactions = [
       ...transactions.filter(t => t.date <= '2017-10-15'),
       ...transactions.filter(t => t.date === '2017-10-16').slice(0, 1),
-      ...transactions.filter(t => t.date === '2017-10-17').slice(0, 3)
+      ...transactions.filter(t => t.date === '2017-10-17').slice(0, 3),
     ];
 
     return {
       accounts: data.accounts,
-      transactions: { [account_id]: mockTransactions }
+      transactions: { [account_id]: mockTransactions },
     };
   });
   return mockTransactions;
@@ -69,13 +72,13 @@ async function prepareDatabase() {
   await db.insertCategory({
     name: 'income',
     cat_group: 'group1',
-    is_income: 1
+    is_income: 1,
   });
 
   const { accounts } = await post(getServer().PLAID_SERVER + '/accounts', {
     client_id: '',
     group_id: '',
-    item_id: '1'
+    item_id: '1',
   });
   const acct = accounts[0];
 
@@ -83,12 +86,12 @@ async function prepareDatabase() {
     id: 'one',
     account_id: acct.account_id,
     name: acct.official_name,
-    balance_current: acct.balances.current
+    balance_current: acct.balances.current,
   });
   await db.insertPayee({
     id: 'transfer-' + id,
     name: '',
-    transfer_acct: id
+    transfer_acct: id,
   });
 
   return { id, account_id: acct.account_id };
@@ -101,15 +104,14 @@ async function getAllPayees() {
 describe('Account sync', () => {
   test('reconcile creates payees correctly', async () => {
     monthUtils.currentDay = () => '2017-10-15';
-    let mockTransactions = prepMockTransactions();
-    let { id, account_id } = await prepareDatabase();
+    let { id } = await prepareDatabase();
 
     let payees = await getAllPayees();
     expect(payees.length).toBe(0);
 
     await reconcileTransactions(id, [
       { date: '2020-01-02', payee_name: 'bakkerij', amount: 4133 },
-      { date: '2020-01-03', payee_name: 'kroger', amount: 5000 }
+      { date: '2020-01-03', payee_name: 'kroger', amount: 5000 },
     ]);
 
     payees = await getAllPayees();
@@ -118,10 +120,10 @@ describe('Account sync', () => {
     let transactions = await getAllTransactions();
     expect(transactions.length).toBe(2);
     expect(transactions.find(t => t.amount === 4133).payee).toBe(
-      payees.find(p => p.name === 'Bakkerij').id
+      payees.find(p => p.name === 'Bakkerij').id,
     );
     expect(transactions.find(t => t.amount === 5000).payee).toBe(
-      payees.find(p => p.name === 'Kroger').id
+      payees.find(p => p.name === 'Kroger').id,
     );
   });
 
@@ -134,7 +136,6 @@ describe('Account sync', () => {
 
     // The payee can be anything, all that matters is the amount is the same
     let mockTransaction = mockTransactions.find(t => t.date === '2017-10-17');
-    let payeeName = mockTransaction.name;
     mockTransaction.amount = 29.47;
 
     let payeeId = await db.insertPayee({ name: 'macy' });
@@ -143,12 +144,12 @@ describe('Account sync', () => {
       account: id,
       amount: -2947,
       date: '2017-10-15',
-      payee: payeeId
+      payee: payeeId,
     });
 
     let { added, updated } = await reconcileTransactions(
       id,
-      mockTransactions.filter(t => t.date >= '2017-10-15').map(fromPlaid)
+      mockTransactions.filter(t => t.date >= '2017-10-15').map(fromPlaid),
     );
 
     expect(added.length).toBe(3);
@@ -177,9 +178,9 @@ describe('Account sync', () => {
     // the same amount are imported first, i.e. high fidelity matches
     // always win
     let mocked = mockTransactions.filter(t => t.date === '2017-10-17');
-    mocked[0].name = 'Papa Johns east side';
+    mocked[0].name = papaJohns;
     mocked[0].amount = 29.47;
-    mocked[1].name = "Lowe's Store";
+    mocked[1].name = 'Lowe’s Store';
     mocked[1].amount = 29.47;
     mocked[2].name = 'macy';
     mocked[2].amount = 29.47;
@@ -192,26 +193,26 @@ describe('Account sync', () => {
       account: id,
       amount: -2947,
       date: '2017-10-15',
-      payee: await db.insertPayee({ name: 'papa johns' })
+      payee: await db.insertPayee({ name: 'papa johns' }),
     });
     await db.insertTransaction({
       id: 'two',
       account: id,
       amount: -2947,
       date: '2017-10-17',
-      payee: await db.insertPayee({ name: 'lowes' })
+      payee: await db.insertPayee({ name: 'lowes' }),
     });
     await db.insertTransaction({
       id: 'three',
       account: id,
       amount: -2947,
       date: '2017-10-17',
-      payee: await db.insertPayee({ name: 'macy' })
+      payee: await db.insertPayee({ name: 'macy' }),
     });
 
     let { added, updated } = await reconcileTransactions(
       id,
-      mockTransactions.filter(t => t.date >= '2017-10-15').map(fromPlaid)
+      mockTransactions.filter(t => t.date >= '2017-10-15').map(fromPlaid),
     );
 
     let transactions = await getAllTransactions();
@@ -219,13 +220,13 @@ describe('Account sync', () => {
     expect(added.length).toBe(1);
 
     expect(transactions.find(t => t.id === 'one').imported_id).toBe(
-      mocked[1].transaction_id
+      mocked[1].transaction_id,
     );
     expect(transactions.find(t => t.id === 'two').imported_id).toBe(
-      mocked[0].transaction_id
+      mocked[0].transaction_id,
     );
     expect(transactions.find(t => t.id === 'three').imported_id).toBe(
-      mocked[2].transaction_id
+      mocked[2].transaction_id,
     );
   });
 
@@ -237,9 +238,9 @@ describe('Account sync', () => {
     await syncAccount('userId', 'userKey', id, account_id, 'bank');
 
     let mocked = mockTransactions.filter(t => t.date === '2017-10-17');
-    mocked[0].name = 'Papa Johns east side';
+    mocked[0].name = papaJohns;
     mocked[0].amount = 29.47;
-    mocked[1].name = "Lowe's Store";
+    mocked[1].name = lowes;
     mocked[1].amount = 29.47;
     mocked[1].transaction_id = 'imported1';
 
@@ -251,19 +252,19 @@ describe('Account sync', () => {
       amount: -3000,
       date: '2017-10-15',
       imported_id: 'imported1',
-      payee: await db.insertPayee({ name: 'papa johns' })
+      payee: await db.insertPayee({ name: 'papa johns' }),
     });
     await db.insertTransaction({
       id: 'two',
       account: id,
       amount: -2947,
       date: '2017-10-17',
-      payee: await db.insertPayee({ name: 'lowes' })
+      payee: await db.insertPayee({ name: 'lowes' }),
     });
 
     let { added, updated } = await reconcileTransactions(
       id,
-      mockTransactions.filter(t => t.date >= '2017-10-15').map(fromPlaid)
+      mockTransactions.filter(t => t.date >= '2017-10-15').map(fromPlaid),
     );
 
     let transactions = await getAllTransactions();
@@ -272,9 +273,7 @@ describe('Account sync', () => {
 
     // Make sure lowes, which has the imported_id, is the one that
     // got matched with the same imported_id
-    expect(transactions.find(t => t.id === 'one').imported_payee).toBe(
-      "Lowe's Store"
-    );
+    expect(transactions.find(t => t.id === 'one').imported_payee).toBe(lowes);
   });
 
   test('import never matches existing with financial ids', async () => {
@@ -299,7 +298,7 @@ describe('Account sync', () => {
       amount: -2947,
       date: '2017-10-15',
       payee: await db.insertPayee({ name: 'foo' }),
-      imported_id: 'trans1'
+      imported_id: 'trans1',
     });
 
     await db.insertTransaction({
@@ -308,7 +307,7 @@ describe('Account sync', () => {
       amount: -2947,
       date: '2017-10-15',
       payee: await db.insertPayee({ name: 'bar' }),
-      imported_id: 'trans2'
+      imported_id: 'trans2',
     });
 
     differ.expectToMatchDiff(await getAllTransactions());
@@ -327,14 +326,14 @@ describe('Account sync', () => {
     await db.insertPayee({
       id: 'transfer-two',
       name: '',
-      transfer_acct: 'two'
+      transfer_acct: 'two',
     });
 
     await syncAccount('userId', 'userKey', id, account_id, 'bank');
     let differ = expectSnapshotWithDiffer(await getAllTransactions());
 
     const mockTransaction = mockTransactions.find(t => t.date === '2017-10-17');
-    mockTransaction.name = "#001 fenn st Macy's 33333 EMX";
+    mockTransaction.name = '#001 fenn st Macy’s 33333 EMX';
     mockTransaction.amount = 29.48;
 
     const transactionId = await db.insertTransaction({
@@ -342,7 +341,7 @@ describe('Account sync', () => {
       account: 'two',
       amount: 2948,
       date: '2017-10-15',
-      payee: 'transfer-' + id
+      payee: 'transfer-' + id,
     });
     await transfer.onInsert(await db.getTransaction(transactionId));
 
@@ -359,16 +358,16 @@ describe('Account sync', () => {
   test('reconcile handles transactions with undefined fields', async () => {
     const { id: acctId } = await prepareDatabase();
 
-    const transactionId = await db.insertTransaction({
+    await db.insertTransaction({
       id: 'one',
       account: acctId,
       amount: 2948,
-      date: '2020-01-01'
+      date: '2020-01-01',
     });
 
     await reconcileTransactions(acctId, [
       { date: '2020-01-02' },
-      { date: '2020-01-01', amount: 2948 }
+      { date: '2020-01-01', amount: 2948 },
     ]);
 
     let transactions = await getAllTransactions();
@@ -381,7 +380,7 @@ describe('Account sync', () => {
 
     // Make _at least_ the date is required
     await expect(reconcileTransactions(acctId, [{}])).rejects.toThrow(
-      /`date` is required/
+      /`date` is required/,
     );
   });
 
@@ -389,23 +388,24 @@ describe('Account sync', () => {
     const { id: acctId } = await prepareDatabase();
     await db.insertCategoryGroup({
       id: 'group2',
-      name: 'group2'
+      name: 'group2',
     });
     let catId = await db.insertCategory({
       name: 'Food',
-      cat_group: 'group2'
+      cat_group: 'group2',
     });
 
     let payeeId = await db.insertPayee({ name: 'bakkerij' });
 
     await insertRule({
       stage: null,
+      conditionsOp: 'and',
       conditions: [{ op: 'is', field: 'payee', value: payeeId }],
-      actions: [{ op: 'set', field: 'category', value: catId }]
+      actions: [{ op: 'set', field: 'category', value: catId }],
     });
 
     await reconcileTransactions(acctId, [
-      { date: '2020-01-02', payee_name: 'Bakkerij', amount: 4133 }
+      { date: '2020-01-02', payee_name: 'Bakkerij', amount: 4133 },
     ]);
 
     let transactions = await getAllTransactions();
@@ -426,7 +426,7 @@ describe('Account sync', () => {
     const { id: acctId } = await prepareDatabase();
 
     await reconcileTransactions(acctId, [
-      { date: '2020-01-02', payee_name: '     ', amount: 4133 }
+      { date: '2020-01-02', payee_name: '     ', amount: 4133 },
     ]);
 
     let transactions = await getAllTransactions();
@@ -450,12 +450,13 @@ describe('Account sync', () => {
 
     await insertRule({
       stage: null,
+      conditionsOp: 'and',
       conditions: [{ op: 'is', field: 'imported_payee', value: 'Bakkerij' }],
-      actions: [{ op: 'set', field: 'payee', value: payeeId }]
+      actions: [{ op: 'set', field: 'payee', value: payeeId }],
     });
 
     await reconcileTransactions(acctId, [
-      { date: '2020-01-02', payee_name: 'bakkerij', amount: 4133 }
+      { date: '2020-01-02', payee_name: 'bakkerij', amount: 4133 },
     ]);
 
     let payees = await getAllPayees();
@@ -496,8 +497,9 @@ describe('Account sync', () => {
       // Unless they sync in a rule...
       await insertRule({
         stage: null,
+        conditionsOp: 'and',
         conditions: [{ op: 'is', field: 'imported_payee', value: 'Bakkerij' }],
-        actions: [{ op: 'set', field: 'payee', value: payeeId2 }]
+        actions: [{ op: 'set', field: 'payee', value: payeeId2 }],
       });
 
       if (version === 'v1') {
@@ -511,7 +513,7 @@ describe('Account sync', () => {
         account: acctId,
         amount: -2947,
         date: '2017-10-15',
-        payee: payeeId1
+        payee: payeeId1,
       });
       // It will try to match to this one first, make sure it matches
       // the above transaction though
@@ -520,16 +522,16 @@ describe('Account sync', () => {
         account: acctId,
         amount: -2947,
         date: '2017-10-17',
-        payee: null
+        payee: null,
       });
 
-      let { added, updated } = await reconcileTransactions(acctId, [
+      let { updated } = await reconcileTransactions(acctId, [
         {
           date: '2017-10-17',
           payee_name: 'bakkerij',
           amount: -2947,
-          imported_id: 'imported1'
-        }
+          imported_id: 'imported1',
+        },
       ]);
 
       let payees = await getAllPayees();
@@ -542,7 +544,7 @@ describe('Account sync', () => {
       let transactions = await getAllTransactions();
       expect(transactions.length).toBe(2);
       expect(transactions.find(t => t.id === 'one').imported_id).toBe(
-        'imported1'
+        'imported1',
       );
     });
   };
@@ -558,31 +560,32 @@ describe('Account sync', () => {
     // Make sure it still runs rules
     await insertRule({
       stage: null,
+      conditionsOp: 'and',
       conditions: [{ op: 'is', field: 'imported_payee', value: 'Bakkerij' }],
-      actions: [{ op: 'set', field: 'payee', value: payeeId }]
+      actions: [{ op: 'set', field: 'payee', value: payeeId }],
     });
 
     let transactions = [
       {
         date: '2017-10-17',
         payee_name: 'BAKKerij',
-        amount: -2947
+        amount: -2947,
       },
       {
         date: '2017-10-18',
         payee_name: 'bakkERIj2',
-        amount: -2947
+        amount: -2947,
       },
       {
         date: '2017-10-19',
         payee_name: 'bakkerij3',
-        amount: -2947
+        amount: -2947,
       },
       {
         date: '2017-10-20',
         payee_name: 'BakkeriJ3',
-        amount: -2947
-      }
+        amount: -2947,
+      },
     ];
 
     let added = await addTransactions(acctId, transactions);
@@ -599,7 +602,7 @@ describe('Account sync', () => {
       'bakkerij3',
       'bakkerij3',
       'bakkERIj2',
-      'bakkerij-renamed'
+      'bakkerij-renamed',
     ]);
   });
 

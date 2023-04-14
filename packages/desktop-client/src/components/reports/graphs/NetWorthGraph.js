@@ -7,7 +7,7 @@ import {
   VictoryArea,
   VictoryAxis,
   VictoryVoronoiContainer,
-  VictoryGroup
+  VictoryGroup,
 } from 'victory';
 
 import theme from '../chart-theme';
@@ -41,7 +41,7 @@ function Area({ start, end, data, style, scale, range }) {
             x={startX}
             y={zero + 1}
             width={endX - startX}
-            height={range.y[0] - zero - 1}
+            height={Math.max(range.y[0] - zero - 1, 0)}
             fill="#ffffff"
           />
         </clipPath>
@@ -80,7 +80,7 @@ function NetWorthGraph({ style, start, end, graphData, compact }) {
       {(width, height, portalHost) =>
         graphData && (
           <Chart
-            scale={{ x: 'time' }}
+            scale={{ x: 'time', y: 'linear' }}
             theme={theme}
             domainPadding={{ x: 0, y: 10 }}
             width={width}
@@ -93,7 +93,7 @@ function NetWorthGraph({ style, start, end, graphData, compact }) {
                 top: 0,
                 bottom: 0,
                 left: 0,
-                right: 0
+                right: 0,
               }
             }
           >
@@ -114,10 +114,10 @@ function NetWorthGraph({ style, start, end, graphData, compact }) {
                       ? { width: 50 }
                       : {
                           clipPath: 'url(#positive)',
-                          fill: 'url(#positive-gradient)'
-                        }
-                }
-              }
+                          fill: 'url(#positive-gradient)',
+                        },
+                },
+              },
             )}
             {graphData.data.length > 1 && (
               <VictoryArea
@@ -127,13 +127,22 @@ function NetWorthGraph({ style, start, end, graphData, compact }) {
                     clipPath: 'url(#negative)',
                     fill: 'url(#negative-gradient)',
                     stroke: theme.colors.red,
-                    strokeLinejoin: 'round'
-                  }
+                    strokeLinejoin: 'round',
+                  },
                 }}
               />
             )}
+            {/* Somehow the path `d` attributes are stripped from second
+             `<VictoryArea />` above if this is removed. I’m just as
+              confused as you are! */}
+            <VictoryArea
+              data={graphData.data}
+              style={{ data: { fill: 'none', stroke: 'none' } }}
+            />
             {!compact && (
               <VictoryAxis
+                style={{ ticks: { stroke: 'red' } }}
+                // eslint-disable-next-line rulesdir/typography
                 tickFormat={x => d.format(x, "MMM ''yy")}
                 tickValues={graphData.data.map(item => item.x)}
                 tickCount={Math.min(5, graphData.data.length)}

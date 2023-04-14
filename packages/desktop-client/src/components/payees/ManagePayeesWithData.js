@@ -3,12 +3,11 @@ import { connect } from 'react-redux';
 
 import * as actions from 'loot-core/src/client/actions';
 import { send, listen } from 'loot-core/src/platform/client/fetch';
-import * as undo from 'loot-core/src/platform/client/undo';
 import { applyChanges } from 'loot-core/src/shared/util';
-import { ManagePayees } from 'loot-design/src/components/payees';
+
+import { ManagePayees } from '.';
 
 function ManagePayeesWithData({
-  history,
   modalProps,
   initialSelectedIds,
   lastUndoState,
@@ -17,7 +16,7 @@ function ManagePayeesWithData({
   initiallyLoadPayees,
   getPayees,
   setLastUndoState,
-  pushModal
+  pushModal,
 }) {
   let [payees, setPayees] = useState(initialPayees);
   let [ruleCounts, setRuleCounts] = useState({ value: new Map() });
@@ -53,10 +52,7 @@ function ManagePayeesWithData({
       }
     });
 
-    undo.setUndoState('openModal', 'manage-payees');
-
     return () => {
-      undo.setUndoState('openModal', null);
       unlisten();
     };
   }, []);
@@ -95,19 +91,25 @@ function ManagePayeesWithData({
   }
 
   function onCreateRule(id) {
-    let payee = payees.find(p => p.id === id);
     let rule = {
-      id: null,
       stage: null,
+      conditionsOp: 'and',
       conditions: [
         {
-          field: 'description',
+          field: 'payee',
           op: 'is',
-          value: payee.id,
-          type: 'id'
-        }
+          value: id,
+          type: 'id',
+        },
       ],
-      actions: []
+      actions: [
+        {
+          op: 'set',
+          field: 'category',
+          value: null,
+          type: 'id',
+        },
+      ],
     };
     pushModal('edit-rule', { rule });
   }
@@ -133,7 +135,7 @@ function ManagePayeesWithData({
           let count = ruleCounts.value.get(id) || 0;
           ruleCounts.value.set(
             targetId,
-            (ruleCounts.value.get(targetId) || 0) + count
+            (ruleCounts.value.get(targetId) || 0) + count,
           );
         });
 
@@ -150,7 +152,7 @@ export default connect(
   state => ({
     initialPayees: state.queries.payees,
     lastUndoState: state.app.lastUndoState,
-    categoryGroups: state.queries.categories.grouped
+    categoryGroups: state.queries.categories.grouped,
   }),
-  actions
+  actions,
 )(ManagePayeesWithData);

@@ -4,13 +4,14 @@ import q from '../../shared/query';
 import { loadRules, updateRule } from '../accounts/transaction-rules';
 import { runQuery as aqlQuery } from '../aql';
 import { loadMappings } from '../db/mappings';
+
 import {
   updateConditions,
   getNextDate,
   createSchedule,
   updateSchedule,
   deleteSchedule,
-  setNextDate
+  setNextDate,
 } from './app';
 
 beforeEach(async () => {
@@ -28,33 +29,33 @@ describe('schedule app', () => {
     it('conditions are updated when they exist', () => {
       let conds = [
         { op: 'is', field: 'payee', value: 'FOO' },
-        { op: 'is', field: 'date', value: '2020-01-01' }
+        { op: 'is', field: 'date', value: '2020-01-01' },
       ];
 
       let updated = updateConditions(conds, [
         {
           op: 'is',
           field: 'payee',
-          value: 'bar'
-        }
+          value: 'bar',
+        },
       ]);
 
       expect(updated.length).toBe(2);
       expect(updated[0].value).toBe('bar');
     });
 
-    it("conditions are added if they don't exist", () => {
+    it('conditions are added if they don’t exist', () => {
       let conds = [
         { op: 'contains', field: 'payee', value: 'FOO' },
-        { op: 'contains', field: 'notes', value: 'dflksjdflskdjf' }
+        { op: 'contains', field: 'notes', value: 'dflksjdflskdjf' },
       ];
 
       let updated = updateConditions(conds, [
         {
           op: 'is',
           field: 'payee',
-          value: 'bar'
-        }
+          value: 'bar',
+        },
       ]);
 
       expect(updated.length).toBe(3);
@@ -62,7 +63,7 @@ describe('schedule app', () => {
 
     it('getNextDate works with date conditions', () => {
       expect(
-        getNextDate({ op: 'is', field: 'date', value: '2021-04-30' })
+        getNextDate({ op: 'is', field: 'date', value: '2021-04-30' }),
       ).toBe('2021-04-30');
 
       expect(
@@ -74,10 +75,10 @@ describe('schedule app', () => {
             frequency: 'monthly',
             patterns: [
               { type: 'day', value: 15 },
-              { type: 'day', value: 30 }
-            ]
-          }
-        })
+              { type: 'day', value: 30 },
+            ],
+          },
+        }),
       ).toBe('2021-05-30');
     });
   });
@@ -94,20 +95,16 @@ describe('schedule app', () => {
               frequency: 'monthly',
               patterns: [
                 { type: 'day', value: 15 },
-                { type: 'day', value: 30 }
-              ]
-            }
-          }
-        ]
+                { type: 'day', value: 30 },
+              ],
+            },
+          },
+        ],
       });
 
       let {
-        data: [row]
-      } = await aqlQuery(
-        q('schedules')
-          .filter({ id })
-          .select('*')
-      );
+        data: [row],
+      } = await aqlQuery(q('schedules').filter({ id }).select('*'));
 
       expect(row).toBeTruthy();
       expect(row.rule).toBeTruthy();
@@ -115,8 +112,8 @@ describe('schedule app', () => {
 
       await expect(
         createSchedule({
-          conditions: [{ op: 'is', field: 'payee', value: 'p1' }]
-        })
+          conditions: [{ op: 'is', field: 'payee', value: 'p1' }],
+        }),
       ).rejects.toThrow(/date condition is required/);
     });
 
@@ -132,17 +129,17 @@ describe('schedule app', () => {
               frequency: 'monthly',
               patterns: [
                 { type: 'day', value: 15 },
-                { type: 'day', value: 30 }
-              ]
-            }
-          }
-        ]
+                { type: 'day', value: 30 },
+              ],
+            },
+          },
+        ],
       });
 
       let res = await aqlQuery(
         q('schedules')
           .filter({ id })
-          .select(['next_date', 'posts_transaction'])
+          .select(['next_date', 'posts_transaction']),
       );
       let row = res.data[0];
 
@@ -162,17 +159,17 @@ describe('schedule app', () => {
               frequency: 'monthly',
               patterns: [
                 { type: 'day', value: 18 },
-                { type: 'day', value: 29 }
-              ]
-            }
-          }
-        ]
+                { type: 'day', value: 29 },
+              ],
+            },
+          },
+        ],
       });
 
       res = await aqlQuery(
         q('schedules')
           .filter({ id })
-          .select(['next_date', 'posts_transaction'])
+          .select(['next_date', 'posts_transaction']),
       );
       row = res.data[0];
 
@@ -192,11 +189,11 @@ describe('schedule app', () => {
               frequency: 'monthly',
               patterns: [
                 { type: 'day', value: 15 },
-                { type: 'day', value: 30 }
-              ]
-            }
-          }
-        ]
+                { type: 'day', value: 30 },
+              ],
+            },
+          },
+        ],
       });
 
       let { data: schedules } = await aqlQuery(q('schedules').select('*'));
@@ -218,17 +215,15 @@ describe('schedule app', () => {
               frequency: 'monthly',
               patterns: [
                 { type: 'day', value: 15 },
-                { type: 'day', value: 30 }
-              ]
-            }
-          }
-        ]
+                { type: 'day', value: 30 },
+              ],
+            },
+          },
+        ],
       });
 
       let { data: ruleId } = await aqlQuery(
-        q('schedules')
-          .filter({ id })
-          .calculate('rule')
+        q('schedules').filter({ id }).calculate('rule'),
       );
 
       // Manually update the rule
@@ -243,17 +238,15 @@ describe('schedule app', () => {
               frequency: 'monthly',
               patterns: [
                 { type: 'day', value: 18 },
-                { type: 'day', value: 28 }
-              ]
-            }
-          }
-        ]
+                { type: 'day', value: 28 },
+              ],
+            },
+          },
+        ],
       });
 
       let res = await aqlQuery(
-        q('schedules')
-          .filter({ id })
-          .select(['next_date'])
+        q('schedules').filter({ id }).select(['next_date']),
       );
       let row = res.data[0];
 
@@ -262,11 +255,7 @@ describe('schedule app', () => {
       MockDate.set(new Date(2021, 4, 17));
       await setNextDate({ id });
 
-      res = await aqlQuery(
-        q('schedules')
-          .filter({ id })
-          .select(['next_date'])
-      );
+      res = await aqlQuery(q('schedules').filter({ id }).select(['next_date']));
       row = res.data[0];
 
       expect(row.next_date).toBe('2021-05-18');

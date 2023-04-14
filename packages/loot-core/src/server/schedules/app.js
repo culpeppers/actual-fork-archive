@@ -2,6 +2,8 @@ import * as d from 'date-fns';
 import deepEqual from 'deep-equal';
 
 import { captureBreadcrumb } from '../../platform/exceptions';
+import * as connection from '../../platform/server/connection';
+import * as uuid from '../../platform/uuid';
 import { dayFromDate, currentDay, parseDate } from '../../shared/months';
 import q from '../../shared/query';
 import {
@@ -9,7 +11,7 @@ import {
   recurConfigToRSchedule,
   getHasTransactionsQuery,
   getStatus,
-  getScheduledAmount
+  getScheduledAmount,
 } from '../../shared/schedules';
 import { Rule, Condition } from '../accounts/rules';
 import { addTransactions } from '../accounts/sync';
@@ -17,7 +19,7 @@ import {
   insertRule,
   updateRule,
   getRules,
-  ruleModel
+  ruleModel,
 } from '../accounts/transaction-rules';
 import { createApp } from '../app';
 import { runQuery as aqlQuery } from '../aql';
@@ -28,10 +30,8 @@ import * as prefs from '../prefs';
 import { addSyncListener, batchMessages } from '../sync';
 import { undoable } from '../undo';
 import { Schedule as RSchedule } from '../util/rschedule';
-import { findSchedules } from './find-schedules';
 
-const connection = require('../../platform/server/connection');
-const uuid = require('../../platform/uuid');
+import { findSchedules } from './find-schedules';
 
 // Utilities
 
@@ -49,7 +49,7 @@ export function updateConditions(conditions, newConditions) {
 
   let replacements = zip(
     Object.values(scheduleConds),
-    Object.values(newScheduleConds)
+    Object.values(newScheduleConds),
   );
 
   let updated = conditions.map(cond => {
@@ -72,7 +72,7 @@ export function getNextDate(dateCond, start = new Date()) {
     'date',
     dateCond.value,
     null,
-    new Map(Object.entries({ date: 'date' }))
+    new Map(Object.entries({ date: 'date' })),
   );
   let value = cond.getValue();
 
@@ -95,18 +95,14 @@ export async function getRuleForSchedule(id) {
   }
 
   let { data: ruleId } = await aqlQuery(
-    q('schedules')
-      .filter({ id })
-      .calculate('rule')
+    q('schedules').filter({ id }).calculate('rule'),
   );
   return getRules().find(rule => rule.id === ruleId);
 }
 
 export async function fixRuleForSchedule(id) {
   let { data: ruleId } = await aqlQuery(
-    q('schedules')
-      .filter({ id })
-      .calculate('rule')
+    q('schedules').filter({ id }).calculate('rule'),
   );
 
   if (ruleId) {
@@ -117,11 +113,12 @@ export async function fixRuleForSchedule(id) {
 
   let newId = await insertRule({
     stage: null,
+    conditionsOp: 'and',
     conditions: [
       { op: 'isapprox', field: 'date', value: currentDay() },
-      { op: 'isapprox', field: 'amount', value: 0 }
+      { op: 'isapprox', field: 'amount', value: 0 },
     ],
-    actions: [{ op: 'link-schedule', value: id }]
+    actions: [{ op: 'link-schedule', value: id }],
   });
 
   await db.updateWithSchema('schedules', { id, rule: newId });
@@ -141,16 +138,14 @@ export async function setNextDate({ id, start, conditions, reset }) {
   let { date: dateCond } = extractScheduleConds(conditions);
 
   let { data: nextDate } = await aqlQuery(
-    q('schedules')
-      .filter({ id })
-      .calculate('next_date')
+    q('schedules').filter({ id }).calculate('next_date'),
   );
 
   // Only do this if a date condition exists
   if (dateCond) {
     let newNextDate = getNextDate(
       dateCond,
-      start ? start(nextDate) : new Date()
+      start ? start(nextDate) : new Date(),
     );
 
     if (newNextDate !== nextDate) {
@@ -158,7 +153,7 @@ export async function setNextDate({ id, start, conditions, reset }) {
       // have it, so we need to query it
       let nd = await db.first(
         'SELECT id, base_next_date_ts FROM schedules_next_date WHERE schedule_id = ?',
-        [id]
+        [id],
       );
 
       await db.update(
@@ -167,13 +162,13 @@ export async function setNextDate({ id, start, conditions, reset }) {
           ? {
               id: nd.id,
               base_next_date: toDateRepr(newNextDate),
-              base_next_date_ts: Date.now()
+              base_next_date_ts: Date.now(),
             }
           : {
               id: nd.id,
               local_next_date: toDateRepr(newNextDate),
-              local_next_date_ts: nd.base_next_date_ts
-            }
+              local_next_date_ts: nd.base_next_date_ts,
+            },
       );
     }
   }
@@ -199,23 +194,24 @@ export async function createSchedule({ schedule, conditions = [] } = {}) {
   let ruleId;
   ruleId = await insertRule({
     stage: null,
+    conditionsOp: 'and',
     conditions,
-    actions: [{ op: 'link-schedule', value: scheduleId }]
+    actions: [{ op: 'link-schedule', value: scheduleId }],
   });
 
   let now = Date.now();
-  let nextDateId = await db.insertWithUUID('schedules_next_date', {
+  await db.insertWithUUID('schedules_next_date', {
     schedule_id: scheduleId,
     local_next_date: nextDateRepr,
     local_next_date_ts: now,
     base_next_date: nextDateRepr,
-    base_next_date_ts: now
+    base_next_date_ts: now,
   });
 
-  let id = await db.insertWithSchema('schedules', {
+  await db.insertWithSchema('schedules', {
     ...schedule,
     id: scheduleId,
-    rule: ruleId
+    rule: ruleId,
   });
 
   return scheduleId;
@@ -270,17 +266,17 @@ export async function updateSchedule({ schedule, conditions, resetNextDate }) {
         resetNextDate ||
         !deepEqual(
           oldConditions.find(c => c.field === 'account'),
-          oldConditions.find(c => c.field === 'account')
+          oldConditions.find(c => c.field === 'account'),
         ) ||
         !deepEqual(
-          stripType(oldConditions.find(c => c.field === 'date')),
-          stripType(newConditions.find(c => c.field === 'date'))
+          stripType(oldConditions.find(c => c.field === 'date') || {}),
+          stripType(newConditions.find(c => c.field === 'date') || {}),
         )
       ) {
         await setNextDate({
           id: schedule.id,
           conditions: newConditions,
-          reset: true
+          reset: true,
         });
       }
     } else if (resetNextDate) {
@@ -293,9 +289,7 @@ export async function updateSchedule({ schedule, conditions, resetNextDate }) {
 
 export async function deleteSchedule({ id }) {
   let { data: ruleId } = await aqlQuery(
-    q('schedules')
-      .filter({ id })
-      .calculate('rule')
+    q('schedules').filter({ id }).calculate('rule'),
   );
 
   await batchMessages(async () => {
@@ -309,7 +303,7 @@ export async function skipNextDate({ id }) {
     id,
     start: nextDate => {
       return d.addDays(parseDate(nextDate), 1);
-    }
+    },
   });
 }
 
@@ -361,8 +355,8 @@ function onRuleUpdate(rule) {
           payeeIdx === -1 ? null : `$[${payeeIdx}]`,
           accountIdx === -1 ? null : `$[${accountIdx}]`,
           amountIdx === -1 ? null : `$[${amountIdx}]`,
-          dateIdx === -1 ? null : `$[${dateIdx}]`
-        ]
+          dateIdx === -1 ? null : `$[${dateIdx}]`,
+        ],
       );
     }
   }
@@ -380,10 +374,8 @@ function trackJSONPaths() {
 }
 
 function onApplySync(oldValues, newValues) {
-  let found = false;
   newValues.forEach((items, table) => {
     if (table === 'rules') {
-      found = true;
       items.forEach(newValue => {
         onRuleUpdate(newValue);
       });
@@ -395,11 +387,7 @@ function onApplySync(oldValues, newValues) {
 // posts transactions
 
 async function postTransactionForSchedule({ id }) {
-  let { data } = await aqlQuery(
-    q('schedules')
-      .filter({ id })
-      .select('*')
-  );
+  let { data } = await aqlQuery(q('schedules').filter({ id }).select('*'));
   let schedule = data[0];
   if (schedule == null || schedule._account == null) {
     return;
@@ -411,7 +399,7 @@ async function postTransactionForSchedule({ id }) {
     amount: getScheduledAmount(schedule._amount),
     date: schedule.next_date,
     schedule: schedule.id,
-    cleared: false
+    cleared: false,
   };
 
   if (transaction.account) {
@@ -426,10 +414,10 @@ export async function advanceSchedulesService(syncSuccess) {
   let { data: schedules } = await aqlQuery(
     q('schedules')
       .filter({ completed: false, '_account.closed': false })
-      .select('*')
+      .select('*'),
   );
   let { data: hasTransData } = await aqlQuery(
-    getHasTransactionsQuery(schedules)
+    getHasTransactionsQuery(schedules),
   );
   let hasTrans = new Set(hasTransData.filter(Boolean).map(row => row.schedule));
 
@@ -440,7 +428,7 @@ export async function advanceSchedulesService(syncSuccess) {
     let status = getStatus(
       schedule.next_date,
       schedule.completed,
-      hasTrans.has(schedule.id)
+      hasTrans.has(schedule.id),
     );
 
     if (status === 'paid') {
@@ -457,7 +445,7 @@ export async function advanceSchedulesService(syncSuccess) {
           if (schedule._date < currentDay()) {
             // Complete any single schedules
             await updateSchedule({
-              schedule: { id: schedule.id, completed: true }
+              schedule: { id: schedule.id, completed: true },
             });
           }
         }
@@ -488,7 +476,7 @@ export async function advanceSchedulesService(syncSuccess) {
     connection.send('sync-event', {
       type: 'success',
       tables: ['transactions'],
-      syncDisabled: 'false'
+      syncDisabled: 'false',
     });
   }
 }
@@ -502,11 +490,11 @@ app.method('schedule/delete', mutator(undoable(deleteSchedule)));
 app.method('schedule/skip-next-date', mutator(undoable(skipNextDate)));
 app.method(
   'schedule/post-transaction',
-  mutator(undoable(postTransactionForSchedule))
+  mutator(undoable(postTransactionForSchedule)),
 );
 app.method(
   'schedule/force-run-service',
-  mutator(() => advanceSchedulesService(true))
+  mutator(() => advanceSchedulesService(true)),
 );
 app.method('schedule/get-possible-transactions', getPossibleTransactions);
 app.method('schedule/discover', discoverSchedules);

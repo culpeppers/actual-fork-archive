@@ -5,6 +5,7 @@ node_modules
 
 # testing
 coverage
+test-results
 
 # production
 build
@@ -16,3 +17,5 @@ npm-debug.log
 
 *kcab.*
 public/kcab
+public/data
+public/data-file-index.txt

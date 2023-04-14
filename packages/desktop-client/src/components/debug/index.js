@@ -32,7 +32,7 @@ class Debug extends React.Component {
       code: null,
       sql: null,
       sqlgenValue: localStorage.sqlgenValue,
-      sqlgenRow: localStorage.sqlgenRow
+      sqlgenRow: localStorage.sqlgenRow,
     };
   }
 
@@ -58,11 +58,12 @@ class Debug extends React.Component {
   async fetchSqlGenResult() {
     let row = {};
     try {
-      row = (0, eval)('(' + this.state.sqlgenRow + ')'); // eslint-disable-line
+      // eslint-disable-next-line no-unused-vars, no-eval
+      row = (0, eval)('(' + this.state.sqlgenRow + ')');
     } catch (e) {}
 
     const res = await send('debug-sqlgen', {
-      expr: this.state.sqlgenValue
+      expr: this.state.sqlgenValue,
     });
     this.setState({ sqlgenResult: res });
   }
@@ -85,14 +86,14 @@ class Debug extends React.Component {
 
   render() {
     const {
-      value,
-      outputType,
-      ast,
-      code,
-      sql,
+      // value,
+      // outputType,
+      // ast,
+      // code,
+      // sql,
       sqlgenValue,
       sqlgenRow,
-      sqlgenResult
+      sqlgenResult,
     } = this.state;
 
     return (

@@ -3,12 +3,12 @@ import {
   addDays,
   subDays,
   parseDate,
-  dayFromDate
+  dayFromDate,
 } from '../../shared/months';
 import {
   FIELD_TYPES,
   sortNumbers,
-  getApproxNumberThreshold
+  getApproxNumberThreshold,
 } from '../../shared/rules';
 import { partitionByField, fastSetMerge } from '../../shared/util';
 import { schemaConfig } from '../aql';
@@ -18,6 +18,7 @@ import { RuleError } from '../errors';
 import { requiredFields, toDateRepr } from '../models';
 import { setSyncingMode, batchMessages } from '../sync';
 import { addSyncListener } from '../sync/index';
+
 import {
   Condition,
   Action,
@@ -25,7 +26,7 @@ import {
   RuleIndexer,
   rankRules,
   migrateIds,
-  iterateIds
+  iterateIds,
 } from './rules';
 
 // TODO: Detect if it looks like the user is creating a rename rule
@@ -44,7 +45,7 @@ export function resetState() {
   allRules = new Map();
   firstcharIndexer = new RuleIndexer({
     field: 'imported_payee',
-    method: 'firstchar'
+    method: 'firstchar',
   });
   payeeIndexer = new RuleIndexer({ field: 'payee' });
 }
@@ -55,7 +56,7 @@ function invert(obj) {
   return Object.fromEntries(
     Object.entries(obj).map(entry => {
       return [entry[1], entry[0]];
-    })
+    }),
   );
 }
 
@@ -65,14 +66,14 @@ let publicFields = invert(schemaConfig.views.transactions.fields);
 function fromInternalField(obj) {
   return {
     ...obj,
-    field: publicFields[obj.field] || obj.field
+    field: publicFields[obj.field] || obj.field,
   };
 }
 
 function toInternalField(obj) {
   return {
     ...obj,
-    field: internalFields[obj.field] || obj.field
+    field: internalFields[obj.field] || obj.field,
   };
 }
 
@@ -87,6 +88,11 @@ export const ruleModel = {
         rule.stage !== null
       ) {
         throw new Error('Invalid rule stage: ' + rule.stage);
+      }
+    }
+    if (!update || 'conditionsOp' in rule) {
+      if (!['and', 'or'].includes(rule.conditionsOp)) {
+        throw new Error('Invalid rule conditionsOp: ' + rule.conditionsOp);
       }
     }
 
@@ -108,28 +114,34 @@ export const ruleModel = {
       return value;
     }
 
-    let rule = { ...row };
-    rule.conditions = rule.conditions
-      ? parseArray(rule.conditions).map(cond => fromInternalField(cond))
-      : [];
-    rule.actions = rule.actions
-      ? parseArray(rule.actions).map(action => fromInternalField(action))
-      : [];
-    return rule;
+    let { conditions, conditions_op, actions, ...fields } = row;
+    return {
+      ...fields,
+      conditionsOp: conditions_op,
+      conditions: conditions
+        ? parseArray(conditions).map(cond => fromInternalField(cond))
+        : [],
+      actions: actions
+        ? parseArray(actions).map(action => fromInternalField(action))
+        : [],
+    };
   },
 
   fromJS(rule) {
-    let row = { ...rule };
-    if ('conditions' in row) {
-      let conditions = row.conditions.map(cond => toInternalField(cond));
-      row.conditions = JSON.stringify(conditions);
+    let { conditions, conditionsOp, actions, ...row } = rule;
+    if (conditionsOp) {
+      row.conditions_op = conditionsOp;
     }
-    if ('actions' in row) {
-      let actions = row.actions.map(action => toInternalField(action));
-      row.actions = JSON.stringify(actions);
+    if (Array.isArray(conditions)) {
+      let value = conditions.map(cond => toInternalField(cond));
+      row.conditions = JSON.stringify(value);
+    }
+    if (Array.isArray(actions)) {
+      let value = actions.map(action => toInternalField(action));
+      row.actions = JSON.stringify(value);
     }
     return row;
-  }
+  },
 };
 
 export function makeRule(data) {
@@ -137,7 +149,7 @@ export function makeRule(data) {
   try {
     rule = new Rule({
       ...ruleModel.toJS(data),
-      fieldTypes: FIELD_TYPES
+      fieldTypes: FIELD_TYPES,
     });
   } catch (e) {
     console.warn('Invalid rule', e);
@@ -201,7 +213,7 @@ export async function updateRule(rule) {
 
 export async function deleteRule(rule) {
   let schedule = await db.first('SELECT id FROM schedules WHERE rule = ?', [
-    rule.id
+    rule.id,
   ]);
 
   if (schedule) {
@@ -257,13 +269,12 @@ function onApplySync(oldValues, newValues) {
 // Runner
 export function runRules(trans) {
   let finalTrans = { ...trans };
-  let allChanges = {};
 
   let rules = rankRules(
     fastSetMerge(
       firstcharIndexer.getApplicableRules(trans),
-      payeeIndexer.getApplicableRules(trans)
-    )
+      payeeIndexer.getApplicableRules(trans),
+    ),
   );
 
   for (let i = 0; i < rules.length; i++) {
@@ -289,7 +300,7 @@ export function conditionsToAQL(conditions, { recurDateBounds = 100 } = {}) {
           cond.field,
           cond.value,
           cond.options,
-          FIELD_TYPES
+          FIELD_TYPES,
         );
       } catch (e) {
         errors.push(e.type || 'internal');
@@ -317,12 +328,12 @@ export function conditionsToAQL(conditions, { recurDateBounds = 100 } = {}) {
             return {
               $and: [
                 { amount: { $lt: 0 } },
-                { [field]: { $transform: '$neg', [op]: value } }
-              ]
+                { [field]: { $transform: '$neg', [op]: value } },
+              ],
             };
           } else if (options.inflow) {
             return {
-              $and: [{ amount: { $gt: 0 } }, { [field]: { [op]: value } }]
+              $and: [{ amount: { $gt: 0 } }, { [field]: { [op]: value } }],
             };
           }
         }
@@ -346,31 +357,27 @@ export function conditionsToAQL(conditions, { recurDateBounds = 100 } = {}) {
               .toArray()
               .map(d => dayFromDate(d.date));
 
-            let compare = d => ({ $eq: d });
-
             return {
               $or: dates.map(d => {
                 if (op === 'isapprox') {
                   return {
                     $and: [
                       { date: { $gte: subDays(d, 2) } },
-                      { date: { $lte: addDays(d, 2) } }
-                    ]
+                      { date: { $lte: addDays(d, 2) } },
+                    ],
                   };
                 }
                 return { date: d };
-              })
+              }),
             };
           } else {
-            let { date } = value;
-
             if (op === 'isapprox') {
               let fullDate = parseDate(value.date);
               let high = addDays(fullDate, 2);
               let low = subDays(fullDate, 2);
 
               return {
-                $and: [{ date: { $gte: low } }, { date: { $lte: high } }]
+                $and: [{ date: { $gte: low } }, { date: { $lte: high } }],
               };
             } else {
               switch (value.type) {
@@ -380,14 +387,14 @@ export function conditionsToAQL(conditions, { recurDateBounds = 100 } = {}) {
                   let low = value.date + '-00';
                   let high = value.date + '-99';
                   return {
-                    $and: [{ date: { $gte: low } }, { date: { $lte: high } }]
+                    $and: [{ date: { $gte: low } }, { date: { $lte: high } }],
                   };
                 }
                 case 'year': {
                   let low = value.date + '-00-00';
                   let high = value.date + '-99-99';
                   return {
-                    $and: [{ date: { $gte: low } }, { date: { $lte: high } }]
+                    $and: [{ date: { $gte: low } }, { date: { $lte: high } }],
                   };
                 }
                 default:
@@ -402,8 +409,8 @@ export function conditionsToAQL(conditions, { recurDateBounds = 100 } = {}) {
             return {
               $and: [
                 apply(field, '$gte', number - threshold),
-                apply(field, '$lte', number + threshold)
-              ]
+                apply(field, '$lte', number + threshold),
+              ],
             };
           }
           return apply(field, '$eq', number);
@@ -416,7 +423,7 @@ export function conditionsToAQL(conditions, { recurDateBounds = 100 } = {}) {
         // number type so we don't use `apply`
         let [low, high] = sortNumbers(value.num1, value.num2);
         return {
-          [field]: [{ $gte: low }, { $lte: high }]
+          [field]: [{ $gte: low }, { $lte: high }],
         };
       case 'contains':
         // Running contains with id will automatically reach into
@@ -424,7 +431,7 @@ export function conditionsToAQL(conditions, { recurDateBounds = 100 } = {}) {
         return apply(
           type === 'id' ? field + '.name' : field,
           '$like',
-          '%' + value + '%'
+          '%' + value + '%',
         );
       case 'oneOf':
         let values = value;
@@ -466,7 +473,7 @@ export function applyActions(transactionIds, actions, handlers) {
           action.field,
           action.value,
           action.options,
-          FIELD_TYPES
+          FIELD_TYPES,
         );
       } catch (e) {
         console.log('Action error', e);
@@ -506,7 +513,7 @@ function* getIsSetterRules(
   stage,
   condField,
   actionField,
-  { condValue, actionValue }
+  { condValue, actionValue },
 ) {
   let rules = getRules();
   for (let i = 0; i < rules.length; i++) {
@@ -534,7 +541,7 @@ function* getOneOfSetterRules(
   stage,
   condField,
   actionField,
-  { condValue, actionValue }
+  { condValue, actionValue },
 ) {
   let rules = getRules();
   for (let i = 0; i < rules.length; i++) {
@@ -560,7 +567,7 @@ function* getOneOfSetterRules(
 
 export async function updatePayeeRenameRule(fromNames, to) {
   let renameRule = getOneOfSetterRules('pre', 'imported_payee', 'payee', {
-    actionValue: to
+    actionValue: to,
   }).next().value;
 
   // Note that we don't check for existing rules that set this
@@ -574,21 +581,22 @@ export async function updatePayeeRenameRule(fromNames, to) {
     let newValue = [
       ...fastSetMerge(
         new Set(condition.value),
-        new Set(fromNames.filter(name => name !== ''))
-      )
+        new Set(fromNames.filter(name => name !== '')),
+      ),
     ];
     let rule = {
       ...renameRule,
-      conditions: [{ ...condition, value: newValue }]
+      conditions: [{ ...condition, value: newValue }],
     };
     await updateRule(rule);
     return renameRule.id;
   } else {
     let rule = new Rule({
       stage: 'pre',
+      conditionsOp: 'and',
       conditions: [{ op: 'oneOf', field: 'imported_payee', value: fromNames }],
       actions: [{ op: 'set', field: 'payee', value: to }],
-      fieldTypes: FIELD_TYPES
+      fieldTypes: FIELD_TYPES,
     });
     return insertRule(rule.serialize());
   }
@@ -642,8 +650,9 @@ export async function updateCategoryRules(transactions) {
   let register = await db.all(
     `SELECT t.* FROM v_transactions t
      LEFT JOIN accounts a ON a.id = t.account
-     WHERE date >= ? AND date <= ? AND is_parent = 0 AND a.closed = 0`,
-    [toDateRepr(oldestDate), toDateRepr(addDays(currentDay(), 180))]
+     WHERE date >= ? AND date <= ? AND is_parent = 0 AND a.closed = 0
+     ORDER BY date DESC`,
+    [toDateRepr(oldestDate), toDateRepr(addDays(currentDay(), 180))],
   );
 
   let allTransactions = partitionByField(register, 'payee');
@@ -669,8 +678,8 @@ export async function updateCategoryRules(transactions) {
     for (let [payeeId, category] of categoriesToSet.entries()) {
       let ruleSetters = [
         ...getIsSetterRules(null, 'payee', 'category', {
-          condValue: payeeId
-        })
+          condValue: payeeId,
+        }),
       ];
 
       if (ruleSetters.length > 0) {
@@ -685,7 +694,7 @@ export async function updateCategoryRules(transactions) {
           if (action.value !== category) {
             await updateRule({
               ...rule,
-              actions: [{ ...action, value: category }]
+              actions: [{ ...action, value: category }],
             });
           }
         }
@@ -693,9 +702,10 @@ export async function updateCategoryRules(transactions) {
         // No existing rules, so create one
         let newRule = new Rule({
           stage: null,
+          conditionsOp: 'and',
           conditions: [{ op: 'is', field: 'payee', value: payeeId }],
           actions: [{ op: 'set', field: 'category', value: category }],
-          fieldTypes: FIELD_TYPES
+          fieldTypes: FIELD_TYPES,
         });
         await insertRule(newRule.serialize());
       }
@@ -709,12 +719,12 @@ export async function migrateOldRules() {
     `SELECT p.*, c.id as category FROM payees p
     LEFT JOIN category_mapping cm ON cm.id = p.category
     LEFT JOIN categories c ON (c.id = cm.transferId AND c.tombstone = 0)
-    WHERE p.tombstone = 0 AND transfer_acct IS NULL`
+    WHERE p.tombstone = 0 AND transfer_acct IS NULL`,
   );
   let allRules = await db.all(
     `SELECT pr.*, pm.targetId as payee_id FROM payee_rules pr
       LEFT JOIN payee_mapping pm ON pm.id = pr.payee_id
-      WHERE pr.tombstone = 0`
+      WHERE pr.tombstone = 0`,
   );
 
   let payeesById = new Map();
@@ -748,14 +758,15 @@ export async function migrateOldRules() {
     if (equals.length > 0) {
       rules.push({
         stage: null,
+        conditionsOp: 'and',
         conditions: [
           {
             op: 'oneOf',
             field: 'imported_payee',
-            value: equals.map(payeeRule => payeeRule.value)
-          }
+            value: equals.map(payeeRule => payeeRule.value),
+          },
         ],
-        actions
+        actions,
       });
     }
 
@@ -763,15 +774,16 @@ export async function migrateOldRules() {
       rules = rules.concat(
         contains.map(payeeRule => ({
           stage: null,
+          conditionsOp: 'and',
           conditions: [
             {
               op: 'contains',
               field: 'imported_payee',
-              value: payeeRule.value
-            }
+              value: payeeRule.value,
+            },
           ],
-          actions
-        }))
+          actions,
+        })),
       );
     }
   }
@@ -789,20 +801,21 @@ export async function migrateOldRules() {
   for (let [catId, payeeIds] of catRules) {
     rules.push({
       stage: null,
+      conditionsOp: 'and',
       conditions: [
         {
           op: 'oneOf',
           field: 'payee',
-          value: [...payeeIds]
-        }
+          value: [...payeeIds],
+        },
       ],
       actions: [
         {
           op: 'set',
           field: 'category',
-          value: catId
-        }
-      ]
+          value: catId,
+        },
+      ],
     });
   }
 
@@ -815,8 +828,9 @@ export async function migrateOldRules() {
     for (let rule of rules) {
       await insertRule({
         stage: rule.stage,
+        conditionsOp: rule.conditionsOp,
         conditions: rule.conditions,
-        actions: rule.actions
+        actions: rule.actions,
       });
     }
 

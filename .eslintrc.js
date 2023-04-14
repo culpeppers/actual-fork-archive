@@ -1,10 +1,41 @@
+const path = require('path');
+
+const rulesDirPlugin = require('eslint-plugin-rulesdir');
+rulesDirPlugin.RULES_DIR = path.join(
+  __dirname,
+  'packages',
+  'eslint-plugin-actual',
+  'lib',
+  'rules',
+);
+
 module.exports = {
-  plugins: ['prettier', 'import'],
-  extends: ['react-app'],
+  plugins: ['prettier', 'import', 'rulesdir', '@typescript-eslint'],
+  extends: ['react-app', 'plugin:@typescript-eslint/recommended'],
+  reportUnusedDisableDirectives: true,
   rules: {
     'prettier/prettier': 'error',
+    'no-unused-vars': [
+      'error',
+      {
+        args: 'none',
+        varsIgnorePattern: '^_',
+        ignoreRestSiblings: true,
+      },
+    ],
+
+    'no-restricted-globals': ['error'].concat(
+      require('confusing-browser-globals').filter(g => g !== 'self'),
+    ),
+
+    'rulesdir/typography': 'error',
+
+    // https://github.com/eslint/eslint/issues/16954
+    // https://github.com/eslint/eslint/issues/16953
     'no-loop-func': 'off',
-    'no-restricted-globals': 'off',
+
+    // TODO: re-enable these rules
+    'react-hooks/exhaustive-deps': 'off',
 
     'import/no-useless-path-segments': 'error',
     'import/order': [
@@ -12,13 +43,14 @@ module.exports = {
       {
         alphabetize: {
           caseInsensitive: true,
-          order: 'asc'
+          order: 'asc',
         },
         groups: [
           'builtin', // Built-in types are first
           'external',
-          ['sibling', 'parent'], // Then sibling and parent types. They can be mingled together
-          'index' // Then the index file
+          'parent',
+          'sibling',
+          'index', // Then the index file
         ],
         'newlines-between': 'always',
         pathGroups: [
@@ -28,11 +60,18 @@ module.exports = {
           {
             group: 'external',
             pattern: 'loot-{core,design}/**/*',
-            position: 'after'
-          }
+            position: 'after',
+          },
         ],
-        pathGroupsExcludedImportTypes: ['react']
-      }
-    ]
-  }
+        pathGroupsExcludedImportTypes: ['react'],
+      },
+    ],
+
+    // Rules disable during TS migration
+    '@typescript-eslint/no-var-requires': 'off',
+    'prefer-const': 'off',
+    'prefer-spread': 'off',
+    '@typescript-eslint/no-empty-function': 'off',
+    '@typescript-eslint/no-unused-vars': 'off',
+  },
 };

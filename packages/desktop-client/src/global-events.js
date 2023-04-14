@@ -1,5 +1,5 @@
 import * as sharedListeners from 'loot-core/src/client/shared-listeners';
-import { send, listen } from 'loot-core/src/platform/client/fetch';
+import { listen } from 'loot-core/src/platform/client/fetch';
 import * as undo from 'loot-core/src/platform/client/undo';
 
 export function handleGlobalEvents(actions, store) {
@@ -31,7 +31,7 @@ export function handleGlobalEvents(actions, store) {
     // Right now, it prompts to merge into the first payee
     actions.pushModal('merge-unused-payees', {
       payeeIds: orphanedIds,
-      targetPayeeId: updatedPayeeIds[0]
+      targetPayeeId: updatedPayeeIds[0],
     });
   });
 
@@ -40,16 +40,10 @@ export function handleGlobalEvents(actions, store) {
     if (history) {
       history.push(`/schedule/posts-offline-notification`, {
         locationPtr: history.location,
-        payees
+        payees,
       });
     }
   });
-
-  async function onManage() {
-    let tempId = await send('make-user-temp-id');
-    let url = 'https://actualbudget.com/account?tempId=' + tempId;
-    window.Actual.openURLInBrowser(url);
-  }
 
   // This is experimental: we sync data locally automatically when
   // data changes from the backend
@@ -74,7 +68,7 @@ export function handleGlobalEvents(actions, store) {
         type: 'warning',
         message: 'Unable to authenticate with server',
         sticky: true,
-        id: 'auth-issue'
+        id: 'auth-issue',
       });
     }
   });
@@ -82,7 +76,7 @@ export function handleGlobalEvents(actions, store) {
   sharedListeners.listenForSyncEvent(actions, store);
 
   listen('undo-event', undoState => {
-    let { messages, tables, undoTag } = undoState;
+    let { tables, undoTag } = undoState;
     let promises = [];
 
     if (
@@ -136,7 +130,7 @@ export function handleGlobalEvents(actions, store) {
       message:
         'This browser only supports using the app in one tab at a time, ' +
         'and another tab has opened the app. No changes will be saved ' +
-        'from this tab; please close it and continue working in the other one.'
+        'from this tab; please close it and continue working in the other one.',
     });
   });
 

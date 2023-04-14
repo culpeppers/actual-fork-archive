@@ -1,6 +1,6 @@
-const { join, dirname, basename } = require('path');
+import { join, dirname, basename } from 'path';
 
-const snapshotDiff = require('snapshot-diff');
+import snapshotDiff from 'snapshot-diff';
 
 export function expectSnapshotWithDiffer(initialValue, { onlyUpdates } = {}) {
   let currentValue = initialValue;
@@ -11,7 +11,7 @@ export function expectSnapshotWithDiffer(initialValue, { onlyUpdates } = {}) {
     expectToMatchDiff: value => {
       expect(snapshotDiff(currentValue, value)).toMatchSnapshot();
       currentValue = value;
-    }
+    },
   };
 }
 
@@ -19,7 +19,7 @@ export function getFixtures(filename) {
   join(
     dirname(filename),
     '__fixtures__',
-    basename(filename).replace(/\.[^.]+.js/, '.fixtures.js')
+    basename(filename).replace(/\.[^.]+.js/, '.fixtures.js'),
   );
 }
 

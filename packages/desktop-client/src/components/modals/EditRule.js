@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import {
   initiallyLoadPayees,
-  setUndoEnabled
+  setUndoEnabled,
 } from 'loot-core/src/client/actions/queries';
 import { useSchedules } from 'loot-core/src/client/data-hooks/schedules';
 import q, { runQuery } from 'loot-core/src/client/query-helpers';
@@ -17,13 +17,20 @@ import {
   unparse,
   makeValue,
   FIELD_TYPES,
-  TYPE_INFO
+  TYPE_INFO,
 } from 'loot-core/src/shared/rules';
 import {
   integerToCurrency,
   integerToAmount,
-  amountToInteger
+  amountToInteger,
 } from 'loot-core/src/shared/util';
+
+import useSelected, { SelectedProvider } from '../../hooks/useSelected';
+import AddIcon from '../../icons/v0/Add';
+import SubtractIcon from '../../icons/v0/Subtract';
+import InformationOutline from '../../icons/v1/InformationOutline';
+import { colors } from '../../style';
+import SimpleTransactionsTable from '../accounts/SimpleTransactionsTable';
 import {
   View,
   Text,
@@ -31,17 +38,8 @@ import {
   Button,
   Stack,
   CustomSelect,
-  Tooltip
-} from 'loot-design/src/components/common';
-import useSelected, {
-  SelectedProvider
-} from 'loot-design/src/components/useSelected';
-import { colors } from 'loot-design/src/style';
-import AddIcon from 'loot-design/src/svg/Add';
-import SubtractIcon from 'loot-design/src/svg/Subtract';
-import InformationOutline from 'loot-design/src/svg/v1/InformationOutline';
-
-import SimpleTransactionsTable from '../accounts/SimpleTransactionsTable';
+  Tooltip,
+} from '../common';
 import { StatusBadge } from '../schedules/StatusBadge';
 import { BetweenAmountInput } from '../util/AmountInput';
 import DisplayId from '../util/DisplayId';
@@ -99,7 +97,7 @@ export function OpSelect({
   style,
   value,
   formatOp = friendlyOp,
-  onChange
+  onChange,
 }) {
   // We don't support the `contains` operator for the id type for
   // rules yet
@@ -121,12 +119,22 @@ function EditorButtons({ onAdd, onDelete, style }) {
   return (
     <>
       {onDelete && (
-        <Button bare onClick={onDelete} style={{ padding: 7 }}>
+        <Button
+          bare
+          onClick={onDelete}
+          style={{ padding: 7 }}
+          aria-label="Delete entry"
+        >
           <SubtractIcon style={{ width: 8, height: 8 }} />
         </Button>
       )}
       {onAdd && (
-        <Button bare onClick={onAdd} style={{ padding: 7 }}>
+        <Button
+          bare
+          onClick={onAdd}
+          style={{ padding: 7 }}
+          aria-label="Add entry"
+        >
           <AddIcon style={{ width: 10, height: 10 }} />
         </Button>
       )}
@@ -141,7 +149,7 @@ function FieldError({ type }) {
         fontSize: 12,
         textAlign: 'center',
         color: colors.r5,
-        marginBottom: 5
+        marginBottom: 5,
       }}
     >
       {getFieldError(type)}
@@ -151,13 +159,13 @@ function FieldError({ type }) {
 
 function Editor({ error, style, children }) {
   return (
-    <View style={style}>
+    <View style={style} data-testid="editor-row">
       <Stack
         direction="row"
         align="center"
         spacing={1}
         style={{
-          padding: '3px 5px'
+          padding: '3px 5px',
         }}
       >
         {children}
@@ -168,15 +176,15 @@ function Editor({ error, style, children }) {
 }
 
 export function ConditionEditor({
-  conditionFields,
   ops,
   condition,
   editorStyle,
+  isSchedule,
   onChange,
   onDelete,
-  onAdd
+  onAdd,
 }) {
-  let { field, op, value, type, options, error, inputKey } = condition;
+  let { field, op, value, type, options, error } = condition;
 
   if (field === 'amount' && options) {
     if (options.inflow) {
@@ -214,10 +222,25 @@ export function ConditionEditor({
       <View style={{ flex: 1 }}>{valueEditor}</View>
 
       <Stack direction="row">
-        <EditorButtons onAdd={onAdd} onDelete={onDelete} />
+        <EditorButtons
+          onAdd={onAdd}
+          onDelete={isSchedule && field === 'date' ? null : onDelete}
+        />
       </Stack>
     </Editor>
   );
+}
+
+function formatAmount(amount) {
+  if (!amount) {
+    return integerToCurrency(0);
+  } else if (typeof amount === 'number') {
+    return integerToCurrency(amount);
+  } else {
+    return `${integerToCurrency(amount.num1)} to ${integerToCurrency(
+      amount.num2,
+    )}`;
+  }
 }
 
 function ScheduleDescription({ id }) {
@@ -225,7 +248,7 @@ function ScheduleDescription({ id }) {
     return state.prefs.local.dateFormat || 'MM/dd/yyyy';
   });
   let scheduleData = useSchedules({
-    transform: useCallback(q => q.filter({ id }), [])
+    transform: useCallback(q => q.filter({ id }), []),
   });
 
   if (scheduleData == null) {
@@ -246,7 +269,7 @@ function ScheduleDescription({ id }) {
           style={{
             whiteSpace: 'nowrap',
             overflow: 'hidden',
-            textOverflow: 'ellipsis'
+            textOverflow: 'ellipsis',
           }}
         >
           Payee:{' '}
@@ -254,7 +277,7 @@ function ScheduleDescription({ id }) {
         </Text>
         <Text style={{ margin: '0 5px' }}> — </Text>
         <Text style={{ flexShrink: 0 }}>
-          Amount: {integerToCurrency(schedule._amount || 0)}
+          Amount: {formatAmount(schedule._amount)}
         </Text>
         <Text style={{ margin: '0 5px' }}> — </Text>
         <Text style={{ flexShrink: 0 }}>
@@ -267,12 +290,13 @@ function ScheduleDescription({ id }) {
 }
 
 let actionFields = [
+  'category',
   'payee',
   'notes',
+  'cleared',
+  'account',
   'date',
   'amount',
-  'category',
-  'account'
 ].map(field => [field, mapField(field)]);
 function ActionEditor({ ops, action, editorStyle, onChange, onDelete, onAdd }) {
   let { field, op, value, type, error, inputKey = 'initial' } = action;
@@ -343,7 +367,7 @@ function StageInfo() {
             padding: 10,
             color: colors.n4,
             maxWidth: 450,
-            lineHeight: 1.5
+            lineHeight: 1.5,
           }}
         >
           The stage of a rule allows you to force a specific order. Pre rules
@@ -363,9 +387,9 @@ function StageButton({ selected, children, style, onSelect }) {
         { fontSize: 'inherit' },
         selected && {
           backgroundColor: colors.b9,
-          ':hover': { backgroundColor: colors.b9 }
+          ':hover': { backgroundColor: colors.b9 },
         },
-        style
+        style,
       ]}
       onClick={onSelect}
     >
@@ -379,19 +403,34 @@ function newInput(item) {
 }
 
 export function ConditionsList({
+  conditionsOp,
   conditions,
-  conditionFields,
   editorStyle,
-  onChangeConditions
+  isSchedule,
+  onChangeConditions,
 }) {
   function addCondition(index) {
-    let field = 'payee';
+    // (remove the inflow and outflow pseudo-fields since they’d be a pain to get right)
+    let fields = conditionFields
+      .map(f => f[0])
+      .filter(f => f !== 'amount-inflow' && f !== 'amount-outflow');
+
+    // suggest a sensible next field: the same if 'or' or different if 'and'
+    if (conditions.length && conditionsOp === 'or') {
+      fields = [conditions[0].field];
+    } else {
+      fields = fields.filter(
+        f => !conditions.some(c => c.field.includes(f) || f.includes(c.field)),
+      );
+    }
+    let field = fields[0] || 'payee';
+
     let copy = [...conditions];
     copy.splice(index + 1, 0, {
       type: FIELD_TYPES.get(field),
       field,
       op: 'is',
-      value: null
+      value: null,
     });
     onChangeConditions(copy);
   }
@@ -444,15 +483,15 @@ export function ConditionsList({
             return newInput(
               makeValue(cond.value != null ? [cond.value] : [], {
                 ...cond,
-                op: value
-              })
+                op: value,
+              }),
             );
           } else if (cond.op === 'oneOf' && op !== 'oneOf') {
             return newInput(
               makeValue(cond.value.length > 0 ? cond.value[0] : null, {
                 ...cond,
-                op: value
-              })
+                op: value,
+              }),
             );
           } else if (cond.op !== 'isbetween' && op === 'isbetween') {
             // TODO: I don't think we need `makeValue` anymore. It
@@ -462,14 +501,14 @@ export function ConditionsList({
             return makeValue(
               {
                 num1: amountToInteger(cond.value),
-                num2: amountToInteger(cond.value)
+                num2: amountToInteger(cond.value),
               },
-              { ...cond, op: value }
+              { ...cond, op: value },
             );
           } else if (cond.op === 'isbetween' && op !== 'isbetween') {
             return makeValue(integerToAmount(cond.value.num1 || 0), {
               ...cond,
-              op: value
+              op: value,
             });
           } else {
             return { ...cond, op: value };
@@ -479,7 +518,7 @@ export function ConditionsList({
         }
 
         return cond;
-      })
+      }),
     );
   }
 
@@ -488,7 +527,7 @@ export function ConditionsList({
       Add condition
     </Button>
   ) : (
-    <Stack spacing={2}>
+    <Stack spacing={2} data-testid="condition-list">
       {conditions.map((cond, i) => {
         let ops = TYPE_INFO[cond.type].ops;
 
@@ -504,13 +543,12 @@ export function ConditionsList({
         }
 
         return (
-          <View>
+          <View key={i}>
             <ConditionEditor
-              key={i}
-              conditionFields={conditionFields}
               editorStyle={editorStyle}
               ops={ops}
               condition={cond}
+              isSchedule={isSchedule}
               onChange={(name, value) => {
                 updateCondition(cond, name, value);
               }}
@@ -528,32 +566,35 @@ export function ConditionsList({
 // * Dont touch child transactions?
 
 let conditionFields = [
-  'account',
   'imported_payee',
-  'payee',
+  'account',
   'category',
   'date',
+  'payee',
   'notes',
-  'amount'
+  'amount',
 ]
   .map(field => [field, mapField(field)])
   .concat([
     ['amount-inflow', mapField('amount', { inflow: true })],
-    ['amount-outflow', mapField('amount', { outflow: true })]
+    ['amount-outflow', mapField('amount', { outflow: true })],
   ]);
 
 export default function EditRule({
   history,
   modalProps,
   defaultRule,
-  onSave: originalOnSave
+  onSave: originalOnSave,
 }) {
   let [conditions, setConditions] = useState(defaultRule.conditions.map(parse));
   let [actions, setActions] = useState(defaultRule.actions.map(parse));
   let [stage, setStage] = useState(defaultRule.stage);
+  let [conditionsOp, setConditionsOp] = useState(defaultRule.conditionsOp);
   let [transactions, setTransactions] = useState([]);
   let dispatch = useDispatch();
   let scrollableEl = useRef();
+
+  let isSchedule = actions.some(action => action.op === 'link-schedule');
 
   useEffect(() => {
     dispatch(initiallyLoadPayees());
@@ -575,14 +616,15 @@ export default function EditRule({
     // Run it here
     async function run() {
       let { filters } = await send('make-filters-from-conditions', {
-        conditions: conditions.map(unparse)
+        conditions: conditions.map(unparse),
       });
 
       if (filters.length > 0) {
+        const conditionsOpKey = conditionsOp === 'or' ? '$or' : '$and';
         let { data: transactions } = await runQuery(
           q('transactions')
-            .filter({ $and: filters })
-            .select('*')
+            .filter({ [conditionsOpKey]: filters })
+            .select('*'),
         );
         setTransactions(transactions);
       } else {
@@ -590,7 +632,7 @@ export default function EditRule({
       }
     }
     run();
-  }, [actions, conditions]);
+  }, [actions, conditions, conditionsOp]);
 
   let selectedInst = useSelected('transactions', transactions, []);
 
@@ -599,14 +641,18 @@ export default function EditRule({
   }
 
   function addAction(index) {
-    let field = 'category';
+    let fields = actionFields.map(f => f[0]);
+    for (let action of actions) {
+      fields = fields.filter(f => f !== action.field);
+    }
+    let field = fields[0] || 'category';
 
     let copy = [...actions];
     copy.splice(index + 1, 0, {
       type: FIELD_TYPES.get(field),
       field,
       op: 'set',
-      value: null
+      value: null,
     });
     setActions(copy);
   }
@@ -628,12 +674,16 @@ export default function EditRule({
         }
 
         return a;
-      })
+      }),
     );
   }
 
   function onChangeStage(stage) {
     setStage(stage);
+  }
+
+  function onChangeConditionsOp(name, value) {
+    setConditionsOp(value);
   }
 
   function onRemoveAction(action) {
@@ -643,7 +693,7 @@ export default function EditRule({
   function onApply() {
     send('rule-apply-actions', {
       transactionIds: [...selectedInst.items],
-      actions
+      actions,
     }).then(() => {
       // This makes it refetch the transactions
       setActions([...actions]);
@@ -654,8 +704,9 @@ export default function EditRule({
     let rule = {
       ...defaultRule,
       stage,
+      conditionsOp,
       conditions: conditions.map(unparse),
-      actions: actions.map(unparse)
+      actions: actions.map(unparse),
     };
 
     let method = rule.id ? 'rule-update' : 'rule-add';
@@ -682,7 +733,7 @@ export default function EditRule({
 
   let editorStyle = {
     backgroundColor: colors.n10,
-    borderRadius: 4
+    borderRadius: 4,
   };
 
   return (
@@ -701,7 +752,7 @@ export default function EditRule({
             flexGrow: 0,
             flexShrink: 0,
             flexBasis: 'auto',
-            overflow: 'hidden'
+            overflow: 'hidden',
           }}
         >
           <View
@@ -709,7 +760,7 @@ export default function EditRule({
               flexDirection: 'row',
               alignItems: 'center',
               marginBottom: 15,
-              padding: '0 20px'
+              padding: '0 20px',
             }}
           >
             <Text style={{ color: colors.n4, marginRight: 15 }}>
@@ -746,19 +797,31 @@ export default function EditRule({
               borderBottom: '1px solid ' + colors.border,
               padding: 20,
               overflow: 'auto',
-              maxHeight: 'calc(100% - 300px)'
+              maxHeight: 'calc(100% - 300px)',
             }}
           >
             <View style={{ flexShrink: 0 }}>
               <View style={{ marginBottom: 30 }}>
                 <Text style={{ color: colors.n4, marginBottom: 15 }}>
-                  If all these conditions match:
+                  If
+                  <FieldSelect
+                    data-testid="conditions-op"
+                    style={{ display: 'inline-flex' }}
+                    fields={[
+                      ['and', 'all'],
+                      ['or', 'any'],
+                    ]}
+                    value={conditionsOp}
+                    onChange={onChangeConditionsOp}
+                  />
+                  of these conditions match:
                 </Text>
 
                 <ConditionsList
+                  conditionsOp={conditionsOp}
                   conditions={conditions}
-                  conditionFields={conditionFields}
                   editorStyle={editorStyle}
+                  isSchedule={isSchedule}
                   onChangeConditions={conds => setConditions(conds)}
                 />
               </View>
@@ -775,11 +838,10 @@ export default function EditRule({
                     Add action
                   </Button>
                 ) : (
-                  <Stack spacing={2}>
+                  <Stack spacing={2} data-testid="action-list">
                     {actions.map((action, i) => (
-                      <View>
+                      <View key={i}>
                         <ActionEditor
-                          key={i}
                           ops={['set', 'link-schedule']}
                           action={action}
                           editorStyle={editorStyle}
@@ -803,7 +865,7 @@ export default function EditRule({
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  marginBottom: 12
+                  marginBottom: 12,
                 }}
               >
                 <Text style={{ color: colors.n4, marginBottom: 0 }}>

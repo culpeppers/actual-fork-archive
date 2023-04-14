@@ -8,25 +8,22 @@ import q, { runQuery, liveQuery } from 'loot-core/src/client/query-helpers';
 import { send, sendCatch } from 'loot-core/src/platform/client/fetch';
 import * as monthUtils from 'loot-core/src/shared/months';
 import { extractScheduleConds } from 'loot-core/src/shared/schedules';
-import AccountAutocomplete from 'loot-design/src/components/AccountAutocomplete';
-import { Stack, View, Text, Button } from 'loot-design/src/components/common';
-import DateSelect from 'loot-design/src/components/DateSelect';
-import {
-  FormField,
-  FormLabel,
-  Checkbox
-} from 'loot-design/src/components/forms';
-import PayeeAutocomplete from 'loot-design/src/components/PayeeAutocomplete';
-import RecurringSchedulePicker from 'loot-design/src/components/RecurringSchedulePicker';
-import { SelectedItemsButton } from 'loot-design/src/components/table';
-import useSelected, {
-  SelectedProvider
-} from 'loot-design/src/components/useSelected';
-import { colors } from 'loot-design/src/style';
 
+import useFeatureFlag from '../../hooks/useFeatureFlag';
+import useSelected, { SelectedProvider } from '../../hooks/useSelected';
+import { colors } from '../../style';
 import SimpleTransactionsTable from '../accounts/SimpleTransactionsTable';
+import LegacyAccountAutocomplete from '../autocomplete/AccountAutocomplete';
+import NewAccountAutocomplete from '../autocomplete/NewAccountAutocomplete';
+import NewPayeeAutocomplete from '../autocomplete/NewPayeeAutocomplete';
+import LegacyPayeeAutocomplete from '../autocomplete/PayeeAutocomplete';
+import { Stack, View, Text, Button } from '../common';
+import { FormField, FormLabel, Checkbox } from '../forms';
 import { OpSelect } from '../modals/EditRule';
-import { Page, usePageType } from '../Page';
+import { Page } from '../Page';
+import DateSelect from '../select/DateSelect';
+import RecurringSchedulePicker from '../select/RecurringSchedulePicker';
+import { SelectedItemsButton } from '../table';
 import { AmountInput, BetweenAmountInput } from '../util/AmountInput';
 
 function mergeFields(defaults, initial) {
@@ -76,13 +73,15 @@ function updateScheduleConditions(schedule, fields) {
       {
         op: fields.amountOp,
         field: 'amount',
-        value: fields.amount
-      }
-    ].filter(Boolean)
+        value: fields.amount,
+      },
+    ].filter(Boolean),
   };
 }
 
 export default function ScheduleDetails() {
+  const isNewAutocompleteEnabled = useFeatureFlag('newAutocomplete');
+
   let { id, initialFields } = useParams();
   let adding = id == null;
   let payees = useCachedPayees({ idKey: true });
@@ -91,8 +90,6 @@ export default function ScheduleDetails() {
   let dateFormat = useSelector(state => {
     return state.prefs.local.dateFormat || 'MM/dd/yyyy';
   });
-
-  let pageType = usePageType();
 
   let [state, dispatch] = useReducer(
     (state, action) => {
@@ -117,8 +114,8 @@ export default function ScheduleDetails() {
               amount: schedule._amount || 0,
               amountOp: schedule._amountOp || 'isapprox',
               date: schedule._date,
-              posts_transaction: action.schedule.posts_transaction
-            }
+              posts_transaction: action.schedule.posts_transaction,
+            },
           };
         }
         case 'set-field':
@@ -158,7 +155,7 @@ export default function ScheduleDetails() {
 
           return {
             ...state,
-            fields: { ...state.fields, ...fields }
+            fields: { ...state.fields, ...fields },
           };
         case 'set-transactions':
           return { ...state, transactions: action.transactions };
@@ -171,15 +168,15 @@ export default function ScheduleDetails() {
                 ? {
                     frequency: 'monthly',
                     start: monthUtils.currentDay(),
-                    patterns: []
+                    patterns: [],
                   }
-                : monthUtils.currentDay()
-            }
+                : monthUtils.currentDay(),
+            },
           };
         case 'set-upcoming-dates':
           return {
             ...state,
-            upcomingDates: action.dates
+            upcomingDates: action.dates,
           };
 
         case 'form-error':
@@ -203,21 +200,17 @@ export default function ScheduleDetails() {
           amount: null,
           amountOp: null,
           date: null,
-          posts_transaction: false
+          posts_transaction: false,
         },
-        initialFields
+        initialFields,
       ),
       transactions: [],
-      transactionsMode: adding ? 'matched' : 'linked'
-    }
+      transactionsMode: adding ? 'matched' : 'linked',
+    },
   );
 
   async function loadSchedule() {
-    let { data } = await runQuery(
-      q('schedules')
-        .filter({ id })
-        .select('*')
-    );
+    let { data } = await runQuery(q('schedules').filter({ id }).select('*'));
     return data[0];
   }
 
@@ -227,13 +220,13 @@ export default function ScheduleDetails() {
         let date = {
           start: monthUtils.currentDay(),
           frequency: 'monthly',
-          patterns: []
+          patterns: [],
         };
         let schedule = {
           posts_transaction: false,
           _date: date,
           _conditions: [{ op: 'isapprox', field: 'date', value: date }],
-          _actions: []
+          _actions: [],
         };
 
         dispatch({ type: 'set-schedule', schedule });
@@ -251,7 +244,6 @@ export default function ScheduleDetails() {
   useEffect(() => {
     async function run() {
       let date = state.fields.date;
-      let dates = null;
 
       if (date == null) {
         dispatch({ type: 'set-upcoming-dates', dates: null });
@@ -259,7 +251,7 @@ export default function ScheduleDetails() {
         if (date.frequency) {
           let { data } = await sendCatch('schedule/get-upcoming-dates', {
             config: date,
-            count: 3
+            count: 3,
           });
           dispatch({ type: 'set-upcoming-dates', dates: data });
         } else {
@@ -286,7 +278,7 @@ export default function ScheduleDetails() {
           .filter({ schedule: state.schedule.id })
           .select('*')
           .options({ splits: 'none' }),
-        data => dispatch({ type: 'set-transactions', transactions: data })
+        data => dispatch({ type: 'set-transactions', transactions: data }),
       );
       return live.unsubscribe;
     }
@@ -299,10 +291,15 @@ export default function ScheduleDetails() {
     if (state.schedule && state.transactionsMode === 'matched') {
       let { error, conditions } = updateScheduleConditions(
         state.schedule,
-        state.fields
+        state.fields,
       );
 
       dispatch({ type: 'set-transactions', transactions: [] });
+
+      if (error) {
+        dispatch({ type: 'form-error', error });
+        return;
+      }
 
       // *Extremely* gross hack because the rules are not mapped to
       // public names automatically. We really should be doing that
@@ -317,7 +314,7 @@ export default function ScheduleDetails() {
       });
 
       send('make-filters-from-conditions', {
-        conditions: conditions
+        conditions: conditions,
       }).then(({ filters }) => {
         if (current) {
           let live = liveQuery(
@@ -325,7 +322,7 @@ export default function ScheduleDetails() {
               .filter({ $and: filters })
               .select('*')
               .options({ splits: 'none' }),
-            data => dispatch({ type: 'set-transactions', transactions: data })
+            data => dispatch({ type: 'set-transactions', transactions: data }),
           );
           unsubscribe = live.unsubscribe;
         }
@@ -347,7 +344,7 @@ export default function ScheduleDetails() {
 
     let { error, conditions } = updateScheduleConditions(
       state.schedule,
-      state.fields
+      state.fields,
     );
 
     if (error) {
@@ -358,16 +355,16 @@ export default function ScheduleDetails() {
     let res = await sendCatch(adding ? 'schedule/create' : 'schedule/update', {
       schedule: {
         id: state.schedule.id,
-        posts_transaction: state.fields.posts_transaction
+        posts_transaction: state.fields.posts_transaction,
       },
-      conditions
+      conditions,
     });
 
     if (res.error) {
       dispatch({
         type: 'form-error',
         error:
-          'An error occurred while saving. Please contact help@actualbudget.com for support.'
+          'An error occurred while saving. Please contact help@actualbudget.com for support.',
       });
     } else {
       if (adding) {
@@ -386,8 +383,8 @@ export default function ScheduleDetails() {
         onSave: async () => {
           let schedule = await loadSchedule();
           dispatch({ type: 'set-schedule', schedule });
-        }
-      })
+        },
+      }),
     );
   }
 
@@ -395,15 +392,15 @@ export default function ScheduleDetails() {
     await send('transactions-batch-update', {
       updated: ids.map(id => ({
         id,
-        schedule: scheduleId || state.schedule.id
-      }))
+        schedule: scheduleId || state.schedule.id,
+      })),
     });
     selectedInst.dispatch({ type: 'select-none' });
   }
 
   async function onUnlinkTransactions(ids) {
     await send('transactions-batch-update', {
-      updated: ids.map(id => ({ id, schedule: null }))
+      updated: ids.map(id => ({ id, schedule: null })),
     });
     selectedInst.dispatch({ type: 'select-none' });
   }
@@ -422,6 +419,13 @@ export default function ScheduleDetails() {
   // This is derived from the date
   let repeats = state.fields.date ? !!state.fields.date.frequency : false;
 
+  const PayeeAutocomplete = isNewAutocompleteEnabled
+    ? NewPayeeAutocomplete
+    : LegacyPayeeAutocomplete;
+  const AccountAutocomplete = isNewAutocompleteEnabled
+    ? NewAccountAutocomplete
+    : LegacyAccountAutocomplete;
+
   return (
     <Page
       title={payee ? `Schedule: ${payee.name}` : 'Schedule'}
@@ -429,22 +433,25 @@ export default function ScheduleDetails() {
     >
       <Stack direction="row" style={{ marginTop: 20 }}>
         <FormField style={{ flex: 1 }}>
-          <FormLabel title="Payee" />
+          <FormLabel title="Payee" htmlFor="payee-field" />
           <PayeeAutocomplete
             value={state.fields.payee}
-            inputProps={{ placeholder: '(none)' }}
+            inputId="payee-field"
+            inputProps={{ id: 'payee-field', placeholder: '(none)' }}
             onSelect={id =>
               dispatch({ type: 'set-field', field: 'payee', value: id })
             }
+            isCreatable
           />
         </FormField>
 
         <FormField style={{ flex: 1 }}>
-          <FormLabel title="Account" />
+          <FormLabel title="Account" htmlFor="account-field" />
           <AccountAutocomplete
             includeClosedAccounts={false}
             value={state.fields.account}
-            inputProps={{ placeholder: '(none)' }}
+            inputId="account-field"
+            inputProps={{ id: 'account-field', placeholder: '(none)' }}
             onSelect={id =>
               dispatch({ type: 'set-field', field: 'account', value: id })
             }
@@ -453,7 +460,11 @@ export default function ScheduleDetails() {
 
         <FormField style={{ flex: 1 }}>
           <Stack direction="row" align="center" style={{ marginBottom: 3 }}>
-            <FormLabel title="Amount" style={{ margin: 0, flex: 1 }} />
+            <FormLabel
+              title="Amount"
+              htmlFor="amount-field"
+              style={{ margin: 0, flex: 1 }}
+            />
             <OpSelect
               ops={['is', 'isapprox', 'isbetween']}
               value={state.fields.amountOp}
@@ -472,7 +483,7 @@ export default function ScheduleDetails() {
               style={{
                 padding: '0 10px',
                 color: colors.n5,
-                fontSize: 12
+                fontSize: 12,
               }}
               onChange={(_, op) =>
                 dispatch({ type: 'set-field', field: 'amountOp', value: op })
@@ -486,18 +497,19 @@ export default function ScheduleDetails() {
                 dispatch({
                   type: 'set-field',
                   field: 'amount',
-                  value
+                  value,
                 })
               }
             />
           ) : (
             <AmountInput
+              id="amount-field"
               defaultValue={state.fields.amount}
               onChange={value =>
                 dispatch({
                   type: 'set-field',
                   field: 'amount',
-                  value
+                  value,
                 })
               }
             />
@@ -539,7 +551,9 @@ export default function ScheduleDetails() {
                 style={{ marginTop: 10, color: colors.n4 }}
               >
                 {state.upcomingDates.map(date => (
-                  <View>{monthUtils.format(date, `${dateFormat} EEEE`)}</View>
+                  <View key={date}>
+                    {monthUtils.format(date, `${dateFormat} EEEE`)}
+                  </View>
                 ))}
               </Stack>
             </View>
@@ -552,7 +566,7 @@ export default function ScheduleDetails() {
             flex: 1,
             flexDirection: 'row',
             alignItems: 'center',
-            userSelect: 'none'
+            userSelect: 'none',
           }}
         >
           <Checkbox
@@ -562,7 +576,7 @@ export default function ScheduleDetails() {
               dispatch({ type: 'set-repeats', repeats: e.target.checked });
             }}
           />
-          <label for="form_repeats" style={{ userSelect: 'none' }}>
+          <label htmlFor="form_repeats" style={{ userSelect: 'none' }}>
             Repeats
           </label>
         </View>
@@ -570,7 +584,7 @@ export default function ScheduleDetails() {
         <View
           style={{
             alignItems: 'flex-end',
-            flex: 1
+            flex: 1,
           }}
         >
           <View
@@ -579,7 +593,7 @@ export default function ScheduleDetails() {
               flexDirection: 'row',
               alignItems: 'center',
               userSelect: 'none',
-              justifyContent: 'flex-end'
+              justifyContent: 'flex-end',
             }}
           >
             <Checkbox
@@ -589,11 +603,14 @@ export default function ScheduleDetails() {
                 dispatch({
                   type: 'set-field',
                   field: 'posts_transaction',
-                  value: e.target.checked
+                  value: e.target.checked,
                 });
               }}
             />
-            <label for="form_posts_transaction" style={{ userSelect: 'none' }}>
+            <label
+              htmlFor="form_posts_transaction"
+              style={{ userSelect: 'none' }}
+            >
               Automatically add transaction
             </label>
           </View>
@@ -605,7 +622,7 @@ export default function ScheduleDetails() {
               color: colors.n4,
               marginTop: 10,
               fontSize: 13,
-              lineHeight: '1.4em'
+              lineHeight: '1.4em',
             }}
           >
             If checked, the schedule will automatically create transactions for
@@ -620,7 +637,7 @@ export default function ScheduleDetails() {
                     color: colors.b5,
                     fontSize: 13,
                     textAlign: 'right',
-                    width: 350
+                    width: 350,
                   }}
                 >
                   This schedule has custom conditions and actions
@@ -654,7 +671,7 @@ export default function ScheduleDetails() {
                   color:
                     state.transactionsMode === 'linked' ? colors.b4 : colors.n7,
                   marginRight: 10,
-                  fontSize: 14
+                  fontSize: 14,
                 }}
                 onClick={() => onSwitchTransactions('linked')}
               >
@@ -667,7 +684,7 @@ export default function ScheduleDetails() {
                     state.transactionsMode === 'matched'
                       ? colors.b4
                       : colors.n7,
-                  fontSize: 14
+                  fontSize: 14,
                 }}
                 onClick={() => onSwitchTransactions('matched')}
               >
@@ -697,13 +714,29 @@ export default function ScheduleDetails() {
           )}
 
           <SimpleTransactionsTable
+            renderEmpty={
+              state.transactionsMode === 'matched' &&
+              (() => (
+                <View
+                  style={{ padding: 20, color: colors.n4, textAlign: 'center' }}
+                >
+                  {state.error ? (
+                    <Text style={{ color: colors.r4 }}>
+                      Could not search: {state.error}
+                    </Text>
+                  ) : (
+                    'No transactions found'
+                  )}
+                </View>
+              ))
+            }
             transactions={state.transactions}
             fields={['date', 'payee', 'amount']}
             style={{
               border: '1px solid ' + colors.border,
               borderRadius: 4,
               overflow: 'hidden',
-              marginTop: 5
+              marginTop: 5,
             }}
           />
         </SelectedProvider>

@@ -19,7 +19,7 @@ export function listenForSyncEvent(actions, store) {
         actions.addNotification({
           title: 'Syncing has been fixed!',
           message: 'Happy budgeting!',
-          type: 'message'
+          type: 'message',
         });
       }
 
@@ -46,6 +46,8 @@ export function listenForSyncEvent(actions, store) {
       let notif = null;
       let learnMore =
         '[Learn more](https://actualbudget.github.io/docs/Getting-Started/sync#debugging-sync-issues)';
+      const githubIssueLink =
+        'https://github.com/actualbudget/actual/issues/new?assignees=&labels=bug%2Cneeds+triage&template=bug-report.yml&title=%5BBug%5D%3A+';
 
       switch (subtype) {
         case 'out-of-sync':
@@ -59,8 +61,8 @@ export function listenForSyncEvent(actions, store) {
               id: 'reset-sync',
               button: {
                 title: 'Reset sync',
-                action: actions.resetSync
-              }
+                action: actions.resetSync,
+              },
             };
           } else {
             // A bug happened during the sync process. Sync state needs
@@ -80,8 +82,8 @@ export function listenForSyncEvent(actions, store) {
                   attemptedSyncRepair = true;
                   await send('sync-repair');
                   actions.sync();
-                }
-              }
+                },
+              },
             };
           }
           break;
@@ -99,14 +101,14 @@ export function listenForSyncEvent(actions, store) {
               '\n\nOld encryption keys are not migrated. If using ' +
               'encryption, [reset encryption here](#makeKey).',
             messageActions: {
-              makeKey: () => actions.pushModal('create-encryption-key')
+              makeKey: () => actions.pushModal('create-encryption-key'),
             },
             sticky: true,
             id: 'old-file',
             button: {
               title: 'Reset sync',
-              action: actions.resetSync
-            }
+              action: actions.resetSync,
+            },
           };
           break;
 
@@ -123,8 +125,8 @@ export function listenForSyncEvent(actions, store) {
             id: 'invalid-key-state',
             button: {
               title: 'Reset key',
-              action: () => actions.pushModal('create-encryption-key')
-            }
+              action: () => actions.pushModal('create-encryption-key'),
+            },
           };
 
           break;
@@ -146,8 +148,8 @@ export function listenForSyncEvent(actions, store) {
                 await actions.uploadBudget();
                 actions.sync();
                 actions.loadPrefs();
-              }
-            }
+              },
+            },
           };
           break;
 
@@ -160,7 +162,7 @@ export function listenForSyncEvent(actions, store) {
               learnMore,
             sticky: true,
             id: 'upload-file',
-            button: { title: 'Upload', action: actions.resetSync }
+            button: { title: 'Upload', action: actions.resetSync },
           };
           break;
 
@@ -170,7 +172,7 @@ export function listenForSyncEvent(actions, store) {
           // the server does not match the local one. This can mean a
           // few things depending on the state, and we try to show an
           // appropriate message and call to action to fix it.
-          let { groupId, cloudFileId } = store.getState().prefs.local;
+          let { cloudFileId } = store.getState().prefs.local;
 
           notif = {
             title: 'Syncing has been reset on this cloud file',
@@ -184,8 +186,8 @@ export function listenForSyncEvent(actions, store) {
             id: 'needs-revert',
             button: {
               title: 'Revert',
-              action: () => actions.closeAndDownloadBudget(cloudFileId)
-            }
+              action: () => actions.closeAndDownloadBudget(cloudFileId),
+            },
           };
           break;
         case 'encrypt-failure':
@@ -202,9 +204,9 @@ export function listenForSyncEvent(actions, store) {
                 title: 'Create key',
                 action: () =>
                   actions.pushModal('fix-encryption-key', {
-                    onSuccess: () => actions.sync()
-                  })
-              }
+                    onSuccess: () => actions.sync(),
+                  }),
+              },
             };
           } else {
             notif = {
@@ -218,26 +220,26 @@ export function listenForSyncEvent(actions, store) {
                 title: 'Reset key',
                 action: () =>
                   actions.pushModal('create-encryption-key', {
-                    onSuccess: () => actions.sync()
-                  })
-              }
+                    onSuccess: () => actions.sync(),
+                  }),
+              },
             };
           }
           break;
         case 'invalid-schema':
+          console.trace('invalid-schema', meta);
           notif = {
             title: 'Update required',
             message:
-              "We couldn't apply changes from the server. This probably means you " +
+              'We couldn’t apply changes from the server. This probably means you ' +
               'need to update the app to support the latest database.',
-            type: 'warning'
+            type: 'warning',
           };
           break;
         case 'apply-failure':
+          console.trace('apply-failure', meta);
           notif = {
-            message:
-              "We couldn't apply that change to the database. This is a bug, " +
-              'and it has been reported.'
+            message: `We couldn’t apply that change to the database. Please report this as a bug by [opening a Github issue](${githubIssueLink}).`,
           };
           break;
         case 'beta-version':
@@ -245,10 +247,9 @@ export function listenForSyncEvent(actions, store) {
           // Show nothing
           break;
         default:
+          console.trace('unkown error', info);
           notif = {
-            message:
-              'We had problems syncing your changes. This is a bug, ' +
-              'and it has been reported.'
+            message: `We had problems syncing your changes. Please report this as a bug by [opening a Github issue](${githubIssueLink}).`,
           };
       }
 
