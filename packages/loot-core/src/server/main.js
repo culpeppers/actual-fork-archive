@@ -984,9 +984,18 @@ handlers['account-move'] = mutator(async function({ id, targetId }) {
   });
 });
 
+handlers['create-web-token'] = async function () {
+  let data = await post(getServer().PLAID_SERVER + '/create-web-token');
+  if (data.status === 'undefined') {
+    return { error: 'undefined token', code: data.error_code, type: data.error_type };
+  }
+
+  return { webToken: data };
+};
+
 let stopPolling = false;
 
-handlers['poll-web-token'] = async function({ token }) {
+handlers['poll-web-token'] = async function ({ token }) {
   let [[, userId], [, key]] = await asyncStorage.multiGet([
     'user-id',
     'user-key'
